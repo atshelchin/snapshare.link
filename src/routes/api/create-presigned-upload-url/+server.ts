@@ -13,6 +13,7 @@ const RATE_LIMIT = {
 
 export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
+		const env = platform?.env;
 		const { files } = await request.json();
 
 		const fileSizeBytes = files.reduce((acc: number, size: number) => acc + size);
