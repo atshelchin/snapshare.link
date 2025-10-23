@@ -6,9 +6,7 @@ const RATE_LIMIT = {
 	MAX_FILES_PER_HOUR: 100, // 每小时最多上传 100 个文件
 	MAX_FILES_PER_DAY: 500, // 每天最多上传 500 个文件
 	MAX_SIZE_PER_HOUR: 1000 * 1024 * 1024, // 每小时最多 1000MB
-	MAX_SIZE_PER_DAY: 10 * 1024 * 1024 * 1024, // 每天最多 10GB
-	TIME_WINDOW_HOUR: 60 * 60 * 1000, // 1 小时（毫秒）
-	TIME_WINDOW_DAY: 24 * 60 * 60 * 1000 // 24 小时（毫秒）
+	MAX_SIZE_PER_DAY: 10 * 1024 * 1024 * 1024 // 每天最多 10GB
 };
 
 export const POST: RequestHandler = async ({ request, platform }) => {
