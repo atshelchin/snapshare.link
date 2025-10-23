@@ -126,8 +126,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			fileCountDay: valueDay.fileCountDay + files.length
 		};
 		const newValueHour = {
-			fileSizeHour: valueDay.fileSizeHour + fileSizeBytes,
-			fileCountHour: valueDay.fileCountHour + files.length
+			fileSizeHour: valueHour.fileSizeHour + fileSizeBytes,
+			fileCountHour: valueHour.fileCountHour + files.length
 		};
 
 		await env.KV.put(KeyDay, JSON.stringify(newValueDay), { expirationTtl: 24 * 60 * 60 });
