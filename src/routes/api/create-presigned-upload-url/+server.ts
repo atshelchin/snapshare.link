@@ -96,7 +96,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			);
 		}
 		// 检查每天总大小限制
-		if (valueDay.fileSizeHour + fileSizeBytes > RATE_LIMIT.MAX_SIZE_PER_DAY) {
+		if (valueDay.fileSizeDay + fileSizeBytes > RATE_LIMIT.MAX_SIZE_PER_DAY) {
 			return Response.json(
 				{
 					success: false,
@@ -123,7 +123,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		const newValueDay = {
 			fileSizeDay: valueDay.fileSizeDay + fileSizeBytes,
-			fileCountDay: valueDay.fileSizeDay + files.length
+			fileCountDay: valueDay.fileCountDay + files.length
 		};
 		const newValueHour = {
 			fileSizeHour: valueDay.fileSizeHour + fileSizeBytes,
