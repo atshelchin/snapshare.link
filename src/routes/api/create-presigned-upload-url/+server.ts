@@ -35,16 +35,17 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const KeyDay = uploader_hash_ip + ':' + prefixDay;
 		const KeyHour = uploader_hash_ip + ':' + prefixHour;
 
-		const valueHour = (await env.KV.get(KeyDay)) || {
+		const valueHour = JSON.parse(await env.KV.get(KeyDay)) || {
 			fileSizeHour: 0,
 			fileCountHour: 0
 		};
 
-		const valueDay = (await env.KV.get(KeyHour)) || {
+		const valueDay = JSON.parse(await env.KV.get(KeyHour)) || {
 			fileSizeDay: 0,
 			fileCountDay: 0
 		};
 
+		console.log({ valueDay, valueHour });
 		// 检查每小时文件数量限制
 		if (valueHour.fileCountHour >= RATE_LIMIT.MAX_FILES_PER_HOUR) {
 			return Response.json(
@@ -129,8 +130,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			fileCountHour: valueDay.fileCountHour + files.length
 		};
 
-		await env.KV.put(KeyDay, newValueDay, { expirationTtl: 24 * 60 * 60 });
-		await env.KV.put(KeyHour, newValueHour, { expirationTtl: 60 * 60 });
+		await env.KV.put(KeyDay, JSON.stringify(newValueDay), { expirationTtl: 24 * 60 * 60 });
+		await env.KV.put(KeyHour, JSON.stringify(newValueHour), { expirationTtl: 60 * 60 });
 
 		return Response.json({
 			success: true,
