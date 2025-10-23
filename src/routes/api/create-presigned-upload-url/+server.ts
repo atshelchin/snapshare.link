@@ -1,8 +1,5 @@
 import type { RequestHandler } from './$types';
-import { drizzle } from 'drizzle-orm/d1';
-import { and, gte, eq } from 'drizzle-orm';
 import { createPresignedUploadUrl, hashIP } from '$lib';
-import { files } from '$lib/server/db/schema';
 
 // 限流配置
 const RATE_LIMIT = {
@@ -15,10 +12,10 @@ const RATE_LIMIT = {
 };
 
 export const POST: RequestHandler = async ({ request, platform }) => {
-	const db = drizzle(platform!.env!.DB);
-
 	try {
-		const { fileSizeBytes } = await request.json();
+		const { files } = await request.json();
+
+		const fileSizeBytes = files.reduce((acc: number, size: number) => acc + size);
 
 		// 获取用户 IP 并哈希
 		const userIP =
@@ -29,32 +26,32 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const uploader_hash_ip = await hashIP(userIP);
 
 		// 检查限流
-		const now = Date.now();
-		const oneHourAgo = now - RATE_LIMIT.TIME_WINDOW_HOUR;
-		const oneDayAgo = now - RATE_LIMIT.TIME_WINDOW_DAY;
+		const now = new Date();
 
-		// 查询最近 1 小时内的上传记录
-		const recentFilesHour = await db
-			.select()
-			.from(files)
-			.where(and(eq(files.uploader_hash_ip, uploader_hash_ip), gte(files.created_at, oneHourAgo)))
-			.all();
+		const time = new Date(now.getTime());
+		const prefixHour = time.toISOString().slice(0, 13);
+		const prefixDay = time.toISOString().slice(0, 10);
+		const KeyDay = uploader_hash_ip + ':' + prefixDay;
+		const KeyHour = uploader_hash_ip + ':' + prefixHour;
 
-		// 查询最近 24 小时内的上传记录
-		const recentFilesDay = await db
-			.select()
-			.from(files)
-			.where(and(eq(files.uploader_hash_ip, uploader_hash_ip), gte(files.created_at, oneDayAgo)))
-			.all();
+		const valueHour = (await env.KV.get(KeyDay)) || {
+			fileSizeHour: 0,
+			fileCountHour: 0
+		};
+
+		const valueDay = (await env.KV.get(KeyHour)) || {
+			fileSizeDay: 0,
+			fileCountDay: 0
+		};
 
 		// 检查每小时文件数量限制
-		if (recentFilesHour.length >= RATE_LIMIT.MAX_FILES_PER_HOUR) {
+		if (valueHour.fileCountHour >= RATE_LIMIT.MAX_FILES_PER_HOUR) {
 			return Response.json(
 				{
 					success: false,
 					error: `Rate limit exceeded: Maximum ${RATE_LIMIT.MAX_FILES_PER_HOUR} files per hour`,
 					limit: {
-						current: recentFilesHour.length,
+						current: valueHour.fileCountHour,
 						max: RATE_LIMIT.MAX_FILES_PER_HOUR,
 						window: 'hour'
 					}
@@ -64,13 +61,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		}
 
 		// 检查每天文件数量限制
-		if (recentFilesDay.length >= RATE_LIMIT.MAX_FILES_PER_DAY) {
+		if (valueDay.fileCountDay >= RATE_LIMIT.MAX_FILES_PER_DAY) {
 			return Response.json(
 				{
 					success: false,
 					error: `Rate limit exceeded: Maximum ${RATE_LIMIT.MAX_FILES_PER_DAY} files per day`,
 					limit: {
-						current: recentFilesDay.length,
+						current: valueDay.fileCountDay,
 						max: RATE_LIMIT.MAX_FILES_PER_DAY,
 						window: 'day'
 					}
@@ -80,16 +77,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		}
 
 		// 检查每小时总大小限制
-		const totalSizeHour = recentFilesHour.reduce((sum, f) => sum + (f.file_size || 0), 0);
-		const proposedTotalSize = totalSizeHour + fileSizeBytes;
-
-		if (proposedTotalSize > RATE_LIMIT.MAX_SIZE_PER_HOUR) {
+		if (valueHour.fileSizeHour + fileSizeBytes > RATE_LIMIT.MAX_SIZE_PER_HOUR) {
 			return Response.json(
 				{
 					success: false,
 					error: `Rate limit exceeded: Maximum ${RATE_LIMIT.MAX_SIZE_PER_HOUR / 1024 / 1024}MB per hour`,
 					limit: {
-						current: totalSizeHour,
+						current: valueHour.fileSizeHour,
 						max: RATE_LIMIT.MAX_SIZE_PER_HOUR,
 						requested: fileSizeBytes,
 						window: 'hour',
@@ -99,16 +93,14 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				{ status: 429 }
 			);
 		}
-
-		const totalSizeDay = recentFilesDay.reduce((sum, f) => sum + (f.file_size || 0), 0);
-		const proposedTotalSizeDay = totalSizeDay + fileSizeBytes;
-		if (proposedTotalSizeDay > RATE_LIMIT.MAX_SIZE_PER_DAY) {
+		// 检查每天总大小限制
+		if (valueDay.fileSizeHour + fileSizeBytes > RATE_LIMIT.MAX_SIZE_PER_DAY) {
 			return Response.json(
 				{
 					success: false,
 					error: `Rate limit exceeded: Maximum ${RATE_LIMIT.MAX_SIZE_PER_DAY / 1024 / 1024}MB per day`,
 					limit: {
-						current: totalSizeDay,
+						current: valueDay.fileSizeDay,
 						max: RATE_LIMIT.MAX_SIZE_PER_HOUR,
 						requested: fileSizeBytes,
 						window: 'day',
@@ -120,39 +112,31 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		}
 
 		// 通过限流检查，生成预签名 URL
-		const result = await createPresignedUploadUrl(platform?.env, fileSizeBytes);
+
+		const uploadUrlData = [];
+		for (let i = 0; i < files.length; i++) {
+			const result = await createPresignedUploadUrl(platform?.env, fileSizeBytes);
+			uploadUrlData.push(result);
+		}
+
+		const newValueDay = {
+			fileSizeDay: valueDay.fileSizeDay + fileSizeBytes,
+			fileCountDay: valueDay.fileSizeDay + files.length
+		};
+		const newValueHour = {
+			fileSizeHour: valueDay.fileSizeHour + fileSizeBytes,
+			fileCountHour: valueDay.fileCountHour + files.length
+		};
+
+		await env.KV.put(KeyDay, newValueDay, { expirationTtl: 24 * 60 * 60 });
+		await env.KV.put(KeyHour, newValueHour, { expirationTtl: 60 * 60 });
+
 		return Response.json({
 			success: true,
-			data: result,
+			data: uploadUrlData,
 			limit: {
-				fileSize: {
-					hour: {
-						current: totalSizeHour,
-						max: RATE_LIMIT.MAX_SIZE_PER_HOUR,
-						requested: fileSizeBytes,
-						window: 'hour',
-						unit: 'bytes'
-					},
-					day: {
-						current: totalSizeHour,
-						max: RATE_LIMIT.MAX_SIZE_PER_DAY,
-						requested: fileSizeBytes,
-						window: 'day',
-						unit: 'bytes'
-					}
-				},
-				files: {
-					day: {
-						current: recentFilesDay.length,
-						max: RATE_LIMIT.MAX_FILES_PER_DAY,
-						window: 'day'
-					},
-					hour: {
-						current: recentFilesHour.length,
-						max: RATE_LIMIT.MAX_FILES_PER_HOUR,
-						window: 'hour'
-					}
-				}
+				day: newValueDay,
+				hour: newValueHour
 			}
 		});
 	} catch (error) {

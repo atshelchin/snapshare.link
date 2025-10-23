@@ -22,7 +22,15 @@
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
-	}
+	},
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "640ba6606bb44a1d859598b91f726255",
+			// Optional: preview_id used when running `wrangler dev` for local dev
+			"preview_id": "<ID_OF_PREVIEW_KV_NAMESPACE_FOR_LOCAL_DEVELOPMENT>"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
