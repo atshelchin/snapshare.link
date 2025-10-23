@@ -117,7 +117,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		const uploadUrlData = [];
 		for (let i = 0; i < files.length; i++) {
-			const result = await createPresignedUploadUrl(platform?.env, fileSizeBytes);
+			const result = await createPresignedUploadUrl(platform?.env, files[i]);
 			uploadUrlData.push(result);
 		}
 
