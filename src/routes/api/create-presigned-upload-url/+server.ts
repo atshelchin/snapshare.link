@@ -35,12 +35,12 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const KeyDay = uploader_hash_ip + ':' + prefixDay;
 		const KeyHour = uploader_hash_ip + ':' + prefixHour;
 
-		const valueHour = JSON.parse(await env.KV.get(KeyDay)) || {
+		const valueHour = JSON.parse(await env.KV.get(KeyHour)) || {
 			fileSizeHour: 0,
 			fileCountHour: 0
 		};
 
-		const valueDay = JSON.parse(await env.KV.get(KeyHour)) || {
+		const valueDay = JSON.parse(await env.KV.get(KeyDay)) || {
 			fileSizeDay: 0,
 			fileCountDay: 0
 		};
