@@ -1,2 +1,9 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<script lang="ts">
+	import { resolve } from '$app/paths';
+
+	let channel_id = $state('');
+</script>
+
+<input bind:value={channel_id} />
+
+<a href={resolve(`/channel/${channel_id}`)}>进入房间</a>

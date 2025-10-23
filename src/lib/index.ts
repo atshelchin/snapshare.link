@@ -75,3 +75,105 @@ export async function createPresignedUploadUrl(env: Env, fileSizeBytes: number) 
 		expiresIn: 3600
 	};
 }
+
+export function textToFile(text: string, filename: string = 'untitled.txt'): File {
+	const blob = new Blob([text], { type: 'text/plain' });
+	return new File([blob], filename, { type: 'text/plain' });
+}
+
+export async function genUploadUrls(files: number[]) {
+	const url = 'https://snapshare.link/api/create-presigned-upload-url';
+	const body = { files: files };
+	const options = {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
+	};
+
+	try {
+		const response = await fetch(url, options);
+		const data = await response.json();
+		console.log(data);
+		return data;
+	} catch (error) {
+		console.error(error);
+	}
+}
+
+export function updateProgress(a, b) {
+	console.log(a, b);
+}
+
+export function uploadWithPUT(url: string, file: File, onload, onprogress, onerror, onabort) {
+	const uploadXHR = new XMLHttpRequest();
+
+	// 监听上传进度
+	uploadXHR.upload.addEventListener('progress', function (e) {
+		// if (e.lengthComputable) {
+		onprogress?.(e);
+		// 	updateProgress(e.loaded, e.total);
+		// }
+	});
+
+	// 监听完成
+	uploadXHR.addEventListener('load', function () {
+		onload?.(uploadXHR);
+		// const uploadBtn = document.getElementById('uploadBtn');
+		// uploadBtn.disabled = false;
+		// uploadBtn.textContent = '开始上传';
+
+		// if (uploadXHR.status >= 200 && uploadXHR.status < 300) {
+		// 	showStatus('✅ 上传成功！', 'success');
+		// } else {
+		// 	showStatus(`❌ 上传失败：HTTP ${uploadXHR.status} - ${uploadXHR.statusText}`, 'error');
+		// }
+	});
+
+	// 监听错误
+	uploadXHR.addEventListener('error', function () {
+		// const uploadBtn = document.getElementById('uploadBtn');
+		// uploadBtn.disabled = false;
+		// uploadBtn.textContent = '开始上传';
+		// showStatus('❌ 网络错误，上传失败', 'error');
+		onerror?.();
+	});
+
+	// 监听取消
+	uploadXHR.addEventListener('abort', function () {
+		onabort?.();
+		// const uploadBtn = document.getElementById('uploadBtn');
+		// uploadBtn.disabled = false;
+		// uploadBtn.textContent = '开始上传';
+		// showStatus('⚠️ 上传已取消', 'info');
+	});
+
+	// 发送 PUT 请求
+	uploadXHR.open('PUT', url);
+	uploadXHR.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+	uploadXHR.send(file);
+}
+
+export async function addFile(channel_id: string, file_key: string, file_name: string) {
+	const url = 'https://snapshare.link/api/add-file';
+
+	const body = {
+		channel_id,
+		file_key,
+		file_name
+	};
+	const options = {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
+	};
+
+	try {
+		const response = await fetch(url, options);
+		const data = await response.json();
+
+		console.log('addFile', data);
+		return data;
+	} catch (error) {
+		console.error(error);
+	}
+}
