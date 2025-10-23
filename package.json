@@ -52,5 +52,10 @@
 		"vitest": "^3.2.4",
 		"vitest-browser-svelte": "^1.1.0",
 		"wrangler": "^4.43.0"
+	},
+	"dependencies": {
+		"@aws-sdk/client-s3": "^3.914.0",
+		"@aws-sdk/s3-request-presigner": "^3.914.0",
+		"nanoid": "^5.1.6"
 	}
 }
