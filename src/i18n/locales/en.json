@@ -48,6 +48,18 @@
 			"loading": "Loading...",
 			"empty": "No files yet",
 			"download": "Download"
+		},
+		"fileItem": {
+			"justNow": "Just now",
+			"minutesAgo": "{n} minutes ago",
+			"hoursAgo": "{n} hours ago",
+			"daysAgo": "{n} days ago",
+			"loading": "Loading...",
+			"loadError": "Failed to load",
+			"copyText": "Copy Text",
+			"download": "Download",
+			"audioNotSupported": "Your browser does not support audio playback",
+			"videoNotSupported": "Your browser does not support video playback"
 		}
 	}
 }

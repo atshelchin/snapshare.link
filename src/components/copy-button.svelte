@@ -82,11 +82,11 @@
 		justify-content: center;
 	}
 
-	.copy-button:hover {
+	/* .copy-button:hover {
 		background: var(--color-muted);
 		border-color: var(--color-border-hover);
 		color: var(--color-foreground);
-	}
+	} */
 
 	.copy-button.copied {
 		color: var(--color-success);

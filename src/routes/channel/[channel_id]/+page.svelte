@@ -6,6 +6,8 @@
 	import FilePreviewList from '../../../components/file-preview-list.svelte';
 	import FileUploadProgress from '../../../components/file-upload-progress.svelte';
 	import type { UploadProgress } from '../../../components/file-upload-progress.svelte';
+	import FileItem from '../../../components/file-item.svelte';
+	import ImageLightbox from '../../../components/image-lightbox.svelte';
 	import { useI18n } from '@shelchin/i18n/svelte';
 
 	let { params } = $props();
@@ -40,28 +42,55 @@
 
 	let filesList = $state<FileItem[]>([]);
 	let isLoadingFiles = $state(true);
+	let eventSource: EventSource | null = null;
 
-	// 首次加载文件列表
+	// 图片放大状态
+	let lightboxImageUrl = $state<string | null>(null);
+
+	// 使用 SSE 加载文件列表
 	$effect(() => {
-		loadFiles();
-	});
-
-	async function loadFiles() {
 		isLoadingFiles = true;
-		try {
-			const resp = await fetch(
-				`https://snapshare.link/api/query-files-by-channel?channel_id=${channel_id}`
-			);
-			const data = await resp.json();
-			if (data.files) {
-				filesList = data.files;
+		eventSource = new EventSource(
+			`https://snapshare.link/api/stream-files-by-channel?channel_id=${channel_id}`
+		);
+
+		eventSource.onmessage = (event) => {
+			try {
+				const data = JSON.parse(event.data);
+
+				if (data.type === 'initial') {
+					// 首次加载
+					filesList = data.data || [];
+					isLoadingFiles = false;
+				} else if (data.type === 'update') {
+					// 增量更新
+					const newFiles = data.data || [];
+					// 合并新文件到列表开头，避免重复
+					const existingKeys = new Set(filesList.map((f) => f.file_key));
+					const uniqueNewFiles = newFiles.filter((f: FileItem) => !existingKeys.has(f.file_key));
+					filesList = [...uniqueNewFiles, ...filesList];
+				} else if (data.type === 'error') {
+					console.error('SSE error:', data.error);
+					isLoadingFiles = false;
+				}
+			} catch (error) {
+				console.error('Failed to parse SSE data:', error);
 			}
-		} catch (error) {
-			console.error('加载文件失败：', error);
-		} finally {
+		};
+
+		eventSource.onerror = (error) => {
+			console.error('SSE connection error:', error);
 			isLoadingFiles = false;
-		}
-	}
+			eventSource?.close();
+		};
+
+		return () => {
+			// 清理 SSE 连接
+			if (eventSource) {
+				eventSource.close();
+			}
+		};
+	});
 
 	// 处理文件选择
 	function handleFileSelect(event: Event) {
@@ -288,11 +317,6 @@
 			}, 2000);
 		}
 	}
-
-	const getText = async (url: string) => {
-		const resp = await fetch(url);
-		return await resp.text();
-	};
 </script>
 
 <ChannelHeader {channel_id} />
@@ -419,32 +443,15 @@
 	{:else if filesList.length > 0}
 		<div class="files-grid">
 			{#each filesList as file (file.file_key)}
-				<div class="file-card">
-					<div class="file-info">
-						<div class="file-name">{file.file_name}</div>
-						<div class="file-meta">
-							{#if file.file_type?.startsWith('text/')}
-								{#await getText('https://cdn.snapshare.link/' + file.file_key) then text}
-									<div class="text-preview">{text}</div>
-								{/await}
-							{:else}
-								<a
-									href={'https://cdn.snapshare.link/' + file.file_key}
-									target="_blank"
-									class="download-link"
-								>
-									{i18n.t('channel.fileList.download')}
-								</a>
-							{/if}
-						</div>
-					</div>
-				</div>
+				<FileItem {file} onImageClick={(url) => (lightboxImageUrl = url)} />
 			{/each}
 		</div>
 	{:else}
 		<div class="empty-state">{i18n.t('channel.fileList.empty')}</div>
 	{/if}
 </div>
+
+<ImageLightbox bind:imageUrl={lightboxImageUrl} />
 
 <style>
 	.rate-limit-error {
@@ -644,48 +651,7 @@
 
 	.files-grid {
 		display: grid;
-		gap: var(--space-3);
-	}
-
-	.file-card {
-		padding: var(--space-4);
-		background: var(--color-panel-1);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		transition: all 0.2s ease;
-	}
-
-	.file-card:hover {
-		background: var(--color-panel-2);
-		border-color: var(--color-primary);
-	}
-
-	.file-name {
-		font-weight: var(--font-medium);
-		color: var(--color-foreground);
-		margin-bottom: var(--space-2);
-	}
-
-	.text-preview {
-		padding: var(--space-3);
-		background: var(--color-panel-2);
-		border-radius: var(--radius);
-		font-size: var(--text-sm);
-		color: var(--color-muted-foreground);
-		white-space: pre-wrap;
-		word-break: break-word;
-		max-height: 200px;
-		overflow-y: auto;
-	}
-
-	.download-link {
-		color: var(--color-primary);
-		text-decoration: none;
-		font-size: var(--text-sm);
-	}
-
-	.download-link:hover {
-		text-decoration: underline;
+		gap: var(--space-4);
 	}
 
 	.loading,
