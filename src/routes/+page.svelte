@@ -56,26 +56,6 @@
 		border-color: var(--brand-400);
 	}
 
-	.button-primary {
-		background: var(--color-button-primary);
-		color: var(--color-button-primary-foreground);
-	}
-
-	.button {
-		padding: var(--space-2-5) var(--space-5);
-		border-radius: var(--radius-md);
-		font-size: var(--text-sm);
-		font-weight: var(--font-medium);
-		border: 1px solid transparent;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	button:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 10px 20px var(--button-hover-shadow-color);
-	}
-
 	.tips {
 		margin-top: 160px;
 	}

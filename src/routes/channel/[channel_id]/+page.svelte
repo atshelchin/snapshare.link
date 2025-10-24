@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { textToFile, genUploadUrls, uploadWithPUT, addFile } from '$lib';
 	import ChannelHeader from '../../../components/channel-header.svelte';
-
+	import DangerNotice from '../../../components/danger-notice.svelte';
 	let { params } = $props();
 
 	const channel_id = params.channel_id;
@@ -96,11 +96,46 @@
 
 <ChannelHeader {channel_id} />
 
-<textarea bind:value={txt} />
-<button onclick={shareTxt}> 分享 文本</button>
+<DangerNotice
+	emojiIcon="⏰"
+	content="Shared content will be automatically deleted after 1 hour
+"
+/>
+<div class="tab-content" id="textTab">
+	<textarea
+		class="textarea"
+		bind:value={txt}
+		data-lang="textPlaceholder"
+		placeholder="Enter text content to share..."
+		style="height: 132px;"
+	></textarea>
+	<button onclick={shareTxt} class="button-primary button share-btn" data-lang="shareTextBtn"
+		>Share Text</button
+	>
+</div>
 
-<input type="file" bind:files multiple />
-<button onclick={shareFiles}> 分享 文件</button>
+<div class="tab-content">
+	<div
+		class="upload-area"
+		onclick={() => {
+			document.getElementById('fileInput').click();
+		}}
+	>
+		<div class="upload-icon">📤</div>
+		<div><strong data-lang="uploadTitle">Click to Upload Files</strong></div>
+		<div style="font-size: 12px; color: #999; margin-top: 5px;" data-lang="uploadSubtitle">
+			or drag files here
+		</div>
+		<div style="font-size: 11px; color: #999; margin-top: 5px;" data-lang="uploadTip">
+			✨ Images/Audio/Video support online preview
+		</div>
+	</div>
+	<input type="file" id="fileInput" bind:files multiple />
+</div>
+
+<button onclick={shareFiles} class="button-primary button share-btn" data-lang="shareTextBtn"
+	>Share Files</button
+>
 
 {#await getFiles()}
 	<p>...rolling</p>
@@ -129,3 +164,44 @@
 {:catch error}
 	<p style="color: red">{error.message}</p>
 {/await}
+
+<style>
+	.textarea {
+		width: 100%;
+		padding: 15px;
+		border: 2px solid var(--border-color);
+		border-radius: 10px;
+		font-size: 14px;
+		font-family: inherit;
+		resize: vertical;
+		min-height: 100px;
+		background: var(--container-bg);
+		color: var(--text-primary);
+	}
+
+	.share-btn {
+		margin-top: 10px;
+		width: 100%;
+	}
+	.upload-area {
+		border: 2px dashed var(--border-color);
+		border-radius: 10px;
+		padding: 30px;
+		text-align: center;
+		margin-bottom: 20px;
+		cursor: pointer;
+		transition: all 0.3s;
+		background: var(--container-bg);
+		color: var(--text-primary);
+	}
+	.upload-icon {
+		font-size: 48px;
+		margin-bottom: 10px;
+	}
+	input[type='file'] {
+		display: none;
+	}
+	.tab-content {
+		margin-top: 20px;
+	}
+</style>
