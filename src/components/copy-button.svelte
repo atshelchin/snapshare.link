@@ -2,7 +2,6 @@
 	let copyFeedback = $state(false);
 	let { value, label } = $props();
 	// Copy to clipboard
-	console.log(value, 55);
 	async function handleCopy() {
 		if (!value) return;
 
