@@ -202,7 +202,23 @@
 						class="text-link"
 						data-sveltekit-preload-data="off"
 					>
-						{textContent}
+						<span class="link-text">{textContent}</span>
+						<svg
+							class="external-link-icon"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+						>
+							<path
+								d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+								stroke-width="2"
+								stroke-linecap="round"
+							/>
+							<polyline points="15 3 21 3 21 9" stroke-width="2" stroke-linecap="round" />
+							<line x1="10" y1="14" x2="21" y2="3" stroke-width="2" stroke-linecap="round" />
+						</svg>
 					</a>
 				{:else}
 					<div class="text-preview">{textContent}</div>
@@ -339,23 +355,39 @@
 
 	/* 文本链接 */
 	.text-link {
-		display: block;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 		padding: var(--space-4);
 		background: var(--color-panel-2);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		font-size: var(--text-sm);
 		color: var(--color-primary);
-		word-break: break-all;
 		margin-bottom: var(--space-3);
 		text-decoration: none;
 		transition: all 0.2s ease;
+	}
+
+	.link-text {
+		flex: 1;
+		word-break: break-all;
+	}
+
+	.external-link-icon {
+		flex-shrink: 0;
+		opacity: 0.6;
+		transition: opacity 0.2s ease;
 	}
 
 	.text-link:hover {
 		background: var(--color-primary);
 		color: white;
 		border-color: var(--color-primary);
+	}
+
+	.text-link:hover .external-link-icon {
+		opacity: 1;
 	}
 
 	/* 操作按钮 */
