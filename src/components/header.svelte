@@ -13,7 +13,7 @@
 		<LangToggle />
 	</div>
 
-	<h1 id="headerTitle">⚡ SnapShare</h1>
+	<h1 id="headerTitle">⚡ SnapShare.link</h1>
 	<p id="headerDesc">{i18n.t('app.description')}</p>
 </div>
 

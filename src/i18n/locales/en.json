@@ -12,6 +12,6 @@
 		"description": "Quick File Sharing - No Login Required",
 		"tips": "💡 Tip: People with the same channel ID can see the same content",
 		"enter": "Join Channel",
-		"inputtips": "Enter any channel ID, e.g: mysecretchannel"
+		"inputtips": "Enter any channel ID, e.g: mychannel"
 	}
 }
