@@ -20,5 +20,34 @@
 			"copylink": "Copy Link",
 			"scantojoin": "Scan to Join"
 		}
+	},
+	"channel": {
+		"notice": {
+			"title": "Files Auto Expire",
+			"description": "All uploaded files will be automatically deleted after 1 hour"
+		},
+		"tabs": {
+			"file": "Files",
+			"text": "Text"
+		},
+		"upload": {
+			"clickOrDrag": "Click or drag files here to upload",
+			"limit": "Maximum",
+			"files": "files",
+			"maxSize": "Max file size",
+			"selected": "Selected",
+			"clearAll": "Clear all",
+			"upload": "Upload"
+		},
+		"text": {
+			"placeholder": "Enter text content to share...",
+			"send": "Send"
+		},
+		"fileList": {
+			"title": "Channel Files",
+			"loading": "Loading...",
+			"empty": "No files yet",
+			"download": "Download"
+		}
 	}
 }

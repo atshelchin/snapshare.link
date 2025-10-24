@@ -28,6 +28,63 @@ export async function hashIP(ip: string): Promise<string> {
 	return hashHex.slice(0, 16); // 返回前 16 个字符
 }
 
+// 文件验证配置
+const FILE_VALIDATION = {
+	MAX_FILES: 10,
+	MAX_FILE_SIZE: 100 * 1024 * 1024 // 100MB
+};
+
+export interface FileValidationError {
+	file: File;
+	error: string;
+}
+
+export interface FileValidationResult {
+	valid: File[];
+	invalid: FileValidationError[];
+	totalSize: number;
+}
+
+// 验证文件
+export function validateFiles(files: FileList | File[]): FileValidationResult {
+	const fileArray = Array.from(files);
+	const valid: File[] = [];
+	const invalid: FileValidationError[] = [];
+	let totalSize = 0;
+
+	// 检查文件数量
+	if (fileArray.length > FILE_VALIDATION.MAX_FILES) {
+		return {
+			valid: [],
+			invalid: fileArray.map((file) => ({
+				file,
+				error: `最多只能上传 ${FILE_VALIDATION.MAX_FILES} 个文件`
+			})),
+			totalSize: 0
+		};
+	}
+
+	// 检查每个文件
+	for (const file of fileArray) {
+		if (file.size > FILE_VALIDATION.MAX_FILE_SIZE) {
+			invalid.push({
+				file,
+				error: `文件大小超过 ${FILE_VALIDATION.MAX_FILE_SIZE / 1024 / 1024}MB`
+			});
+		} else if (file.size === 0) {
+			invalid.push({
+				file,
+				error: '文件大小为 0'
+			});
+		} else {
+			valid.push(file);
+			totalSize += file.size;
+		}
+	}
+
+	return { valid, invalid, totalSize };
+}
+
 export interface Env {
 	ACCESS_KEY_ID: string;
 	SECRET_ACCESS_KEY: string;

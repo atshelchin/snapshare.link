@@ -1,10 +1,10 @@
 <script lang="ts">
-	let { emojiIcon, content } = $props();
+	let { emojiIcon, description } = $props();
 </script>
 
 <div class="expire-notice" data-theme="dark">
 	<span class="expire-icon">{emojiIcon}</span>
-	<span data-lang="expireNotice">{content}</span>
+	<span data-lang="expireNotice">{description}</span>
 </div>
 
 <style>
