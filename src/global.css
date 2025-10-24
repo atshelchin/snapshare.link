@@ -5,10 +5,13 @@
 	--bg-gradient-end: var(--brand-600);
 	--container-bg: var(--color-background);
 	--header-text: var(--color-primary-foreground);
-	/* --text-primary: #333333;
+	--border-color: #e0e0e0;
+	--text-primary: #333333;
+	--button-hover-shadow-color: var(--brand-200);
+	/* 
             --text-secondary: #666666;
             --text-muted: #999999;
-            --border-color: #e0e0e0;
+        
             --upload-hover-bg: #f9f9ff;
             --item-bg: #f9f9f9;
             --header-text: #ffffff; */
@@ -21,10 +24,14 @@
 	--bg-gradient-end: var(--gray-800);
 	--container-bg: var(--color-panel-1);
 	--header-text: var(--color-foreground);
-	/* --text-primary: #e0e0e0;
+	--border-color: #404040;
+	--text-primary: #e0e0e0;
+	--color-button-primary: var(--gray-800);
+	--button-hover-shadow-color: var(--gray-800);
+	/*
             --text-secondary: #b0b0b0;
             --text-muted: #808080;
-            --border-color: #404040;
+  
             --upload-hover-bg: #2a2a2a;
             --item-bg: #2a2a2a;
             --header-text: #ffffff; */

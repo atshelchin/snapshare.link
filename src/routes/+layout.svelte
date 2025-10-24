@@ -36,7 +36,8 @@
 		transition: background 0.3s ease;
 	}
 	.content {
-		min-height: calc(100vh - 190px);
+		padding: 30px;
+		min-height: 400px;
 		background-color: var(--color-panel-1);
 	}
 	@media (max-width: 768px) {
@@ -44,6 +45,10 @@
 			width: 100vw;
 			border-radius: 0px;
 			min-height: 100vh;
+		}
+
+		.content {
+			min-height: calc(100vh - 190px);
 		}
 	}
 

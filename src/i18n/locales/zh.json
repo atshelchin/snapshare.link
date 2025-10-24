@@ -9,6 +9,9 @@
 	"welcome": "你好",
 	"connect": "连接",
 	"app": {
-		"description": "快速分享文件、文本、链接 - 无需登录"
+		"description": "快速分享文件、文本、链接 - 无需登录",
+		"tips": "💡 提示：使用相同频道号的人可以看到相同内容",
+		"enter": "进入频道",
+		"inputtips": "输入任意频道号，如：mysecretchannel"
 	}
 }
