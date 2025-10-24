@@ -477,6 +477,11 @@
 
 	.upload-section {
 		margin-bottom: var(--space-8);
+		padding: var(--space-6);
+		background: var(--color-panel-1);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 	}
 
 	.tab-content {
@@ -643,7 +648,21 @@
 
 	/* 文件列表 */
 	.files-list-section {
-		margin-top: var(--space-8);
+		margin-top: var(--space-12);
+		padding-top: var(--space-8);
+		border-top: 2px solid var(--color-border);
+		position: relative;
+	}
+
+	.files-list-section::before {
+		content: '';
+		position: absolute;
+		top: -2px;
+		left: 0;
+		right: 0;
+		height: 2px;
+		background: linear-gradient(90deg, transparent, var(--color-primary) 50%, transparent);
+		opacity: 0.3;
 	}
 
 	.section-title {
@@ -651,6 +670,14 @@
 		font-weight: var(--font-semibold);
 		color: var(--color-foreground);
 		margin-bottom: var(--space-4);
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+
+	.section-title::before {
+		content: '📋';
+		font-size: var(--text-2xl);
 	}
 
 	.files-grid {
