@@ -81,7 +81,7 @@
 	}
 	@media (max-width: 768px) {
 		.room-input-group {
-			margin-top: 250px;
+			margin-top: 100px;
 		}
 	}
 </style>
