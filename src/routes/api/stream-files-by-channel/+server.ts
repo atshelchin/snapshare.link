@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, desc, gt } from 'drizzle-orm';
+import { eq, desc, gt, and } from 'drizzle-orm';
 import { files } from '$lib/server/db/schema';
 
 type ChannelFile = {
@@ -56,12 +56,11 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 				// 轮询检查新数据
 				const intervalId = setInterval(async () => {
 					try {
-						// 查询比最后时间戳更新的文件
+						// 查询比最后时间戳更新的文件，并且属于当前频道
 						const newFiles = (await db
 							.select()
 							.from(files)
-							.where(eq(files.channel_id, channel_id))
-							.where(gt(files.created_at, lastTimestamp))
+							.where(and(eq(files.channel_id, channel_id), gt(files.created_at, lastTimestamp)))
 							.orderBy(desc(files.created_at))
 							.all()) as ChannelFile[];
 
