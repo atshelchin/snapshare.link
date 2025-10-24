@@ -10,7 +10,6 @@
 	const i18n = useI18n();
 	let { channel_id } = $props();
 	let basicModal = $state(false);
-	console.log({ channel_id });
 	const leave = () => {
 		goto(resolve('/'));
 	};
