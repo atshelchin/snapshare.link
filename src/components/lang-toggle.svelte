@@ -26,7 +26,6 @@
 
 		const rect = containerRef.getBoundingClientRect();
 		const containerRect = container.getBoundingClientRect();
-		console.log({ rect, containerRect });
 
 		const menuHeight = 100; // Approximate height of dropdown menu
 		const menuWidth = 160; // Approximate width of dropdown menu
@@ -38,8 +37,6 @@
 		// Check horizontal space relative to container
 		const spaceRight = containerRect.right - rect.right;
 		const spaceLeft = rect.left - containerRect.left;
-
-		console.log({ spaceRight, menuWidth, spaceLeft, spaceBelow, spaceAbove });
 
 		// Determine vertical direction
 		if (spaceBelow < menuHeight && spaceAbove > menuHeight) {
