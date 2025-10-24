@@ -236,6 +236,8 @@
 		border-radius: var(--radius-lg);
 		padding: var(--space-4);
 		transition: all 0.2s ease;
+		max-width: 100%;
+		overflow: hidden;
 	}
 
 	.file-item:hover {
@@ -287,13 +289,15 @@
 
 	.file-content {
 		margin-bottom: var(--space-3);
+		max-width: 100%;
+		overflow: hidden;
 	}
 
 	/* 图片预览 */
 	.image-preview {
 		position: relative;
 		width: 100%;
-		max-width: 400px;
+		max-width: 100%;
 		border-radius: var(--radius-md);
 		overflow: hidden;
 		cursor: zoom-in;
@@ -305,9 +309,17 @@
 
 	.image-preview img {
 		width: 100%;
+		max-width: 100%;
 		height: auto;
 		display: block;
+		object-fit: contain;
 		transition: transform 0.2s ease;
+	}
+
+	@media (min-width: 640px) {
+		.image-preview {
+			max-width: 400px;
+		}
 	}
 
 	.image-overlay {
@@ -340,8 +352,11 @@
 		color: var(--color-foreground);
 		white-space: pre-wrap;
 		word-break: break-word;
+		overflow-wrap: break-word;
 		max-height: 300px;
+		max-width: 100%;
 		overflow-y: auto;
+		overflow-x: hidden;
 		margin-bottom: var(--space-3);
 		font-family: var(--font-family-mono, monospace);
 	}
@@ -367,11 +382,15 @@
 		margin-bottom: var(--space-3);
 		text-decoration: none;
 		transition: all 0.2s ease;
+		max-width: 100%;
+		overflow: hidden;
 	}
 
 	.link-text {
 		flex: 1;
+		min-width: 0;
 		word-break: break-all;
+		overflow-wrap: break-word;
 	}
 
 	.external-link-icon {

@@ -176,6 +176,8 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		transition: all 0.2s ease;
+		max-width: 100%;
+		overflow: hidden;
 	}
 
 	.audio-player:hover {

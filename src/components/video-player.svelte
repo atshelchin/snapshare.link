@@ -249,11 +249,17 @@
 	.video-player-container {
 		position: relative;
 		width: 100%;
-		max-width: 800px;
+		max-width: 100%;
 		background: black;
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	}
+
+	@media (min-width: 640px) {
+		.video-player-container {
+			max-width: 800px;
+		}
 	}
 
 	.video-player-container:fullscreen {
@@ -263,6 +269,7 @@
 
 	.video-element {
 		width: 100%;
+		max-width: 100%;
 		height: auto;
 		display: block;
 		cursor: pointer;
