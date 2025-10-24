@@ -37,11 +37,22 @@
 			"maxSize": "Max file size",
 			"selected": "Selected",
 			"clearAll": "Clear all",
-			"upload": "Upload"
+			"upload": "Upload",
+			"uploading": "Uploading...",
+			"progress": "Upload Progress",
+			"rateLimitError": "Upload limited",
+			"requestFailed": "Failed to request upload URL",
+			"uploadFailed": "Upload failed",
+			"uploadError": "Error occurred during upload",
+			"networkError": "Network error",
+			"uploadCanceled": "Upload canceled",
+			"addFileFailed": "Failed to add file record"
 		},
 		"text": {
 			"placeholder": "Enter text content to share...",
-			"send": "Send"
+			"send": "Send",
+			"sending": "Sending...",
+			"uploadFailed": "Text upload failed"
 		},
 		"fileList": {
 			"title": "Channel Files",

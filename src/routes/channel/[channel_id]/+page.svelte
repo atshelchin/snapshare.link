@@ -145,9 +145,11 @@
 				// 处理限流错误
 				if (urlsData.limit) {
 					const limit = urlsData.limit.hour || urlsData.limit.day;
-					rateLimitError = `上传受限：${urlsData.error}。当前已用 ${Math.round(limit.current / 1024 / 1024)}MB / ${Math.round(limit.max / 1024 / 1024)}MB`;
+					const currentMB = Math.round(limit.current / 1024 / 1024);
+					const maxMB = Math.round(limit.max / 1024 / 1024);
+					rateLimitError = `${i18n.t('channel.upload.rateLimitError')}: ${urlsData.error}. ${currentMB}MB / ${maxMB}MB`;
 				} else {
-					rateLimitError = urlsData.error || '请求上传链接失败';
+					rateLimitError = urlsData.error || i18n.t('channel.upload.requestFailed');
 				}
 				uploadQueue = [];
 				isUploading = false;
@@ -161,8 +163,8 @@
 
 			await Promise.all(uploadPromises);
 		} catch (error) {
-			console.error('上传失败：', error);
-			rateLimitError = '上传过程中发生错误';
+			console.error(i18n.t('channel.upload.uploadError'), error);
+			rateLimitError = i18n.t('channel.upload.uploadError');
 		} finally {
 			isUploading = false;
 			// 清空选择
@@ -205,12 +207,12 @@
 							...filesList
 						];
 					} catch (err) {
-						console.error('添加文件记录失败:', err);
+						console.error(i18n.t('channel.upload.addFileFailed'), err);
 					}
 					resolve();
 				} else {
 					uploadQueue[index].status = 'error';
-					uploadQueue[index].error = `上传失败: HTTP ${xhr.status}`;
+					uploadQueue[index].error = `${i18n.t('channel.upload.uploadFailed')}: HTTP ${xhr.status}`;
 					reject(new Error(`HTTP ${xhr.status}`));
 				}
 			};
@@ -223,14 +225,14 @@
 
 			const onerror = () => {
 				uploadQueue[index].status = 'error';
-				uploadQueue[index].error = '网络错误';
-				reject(new Error('网络错误'));
+				uploadQueue[index].error = i18n.t('channel.upload.networkError');
+				reject(new Error(i18n.t('channel.upload.networkError')));
 			};
 
 			const onabort = () => {
 				uploadQueue[index].status = 'error';
-				uploadQueue[index].error = '上传已取消';
-				reject(new Error('上传已取消'));
+				uploadQueue[index].error = i18n.t('channel.upload.uploadCanceled');
+				reject(new Error(i18n.t('channel.upload.uploadCanceled')));
 			};
 
 			uploadWithPUT(uploadData.url, file, onload, onprogress, onerror, onabort);
@@ -252,9 +254,11 @@
 			if (!urlsData.success) {
 				if (urlsData.limit) {
 					const limit = urlsData.limit.hour || urlsData.limit.day;
-					rateLimitError = `上传受限：${urlsData.error}。当前已用 ${Math.round(limit.current / 1024 / 1024)}MB / ${Math.round(limit.max / 1024 / 1024)}MB`;
+					const currentMB = Math.round(limit.current / 1024 / 1024);
+					const maxMB = Math.round(limit.max / 1024 / 1024);
+					rateLimitError = `${i18n.t('channel.upload.rateLimitError')}: ${urlsData.error}. ${currentMB}MB / ${maxMB}MB`;
 				} else {
-					rateLimitError = urlsData.error || '请求上传链接失败';
+					rateLimitError = urlsData.error || i18n.t('channel.upload.requestFailed');
 				}
 				isUploadingText = false;
 				return;
@@ -282,7 +286,7 @@
 						txt = '';
 						resolve();
 					} else {
-						rateLimitError = `上传失败: HTTP ${xhr.status}`;
+						rateLimitError = `${i18n.t('channel.upload.uploadFailed')}: HTTP ${xhr.status}`;
 						reject(new Error(`HTTP ${xhr.status}`));
 					}
 				};
@@ -299,17 +303,17 @@
 					onload,
 					onprogress,
 					() => {
-						rateLimitError = '网络错误';
-						reject(new Error('网络错误'));
+						rateLimitError = i18n.t('channel.upload.networkError');
+						reject(new Error(i18n.t('channel.upload.networkError')));
 					},
 					() => {
-						rateLimitError = '上传已取消';
-						reject(new Error('上传已取消'));
+						rateLimitError = i18n.t('channel.upload.uploadCanceled');
+						reject(new Error(i18n.t('channel.upload.uploadCanceled')));
 					}
 				);
 			});
 		} catch (error) {
-			console.error('文本上传失败：', error);
+			console.error(i18n.t('channel.text.uploadFailed'), error);
 		} finally {
 			isUploadingText = false;
 			setTimeout(() => {
@@ -342,7 +346,7 @@
 			<div class="tab-content">
 				{#if uploadQueue.length > 0}
 					<div class="upload-queue">
-						<h4 class="queue-title">上传进度</h4>
+						<h4 class="queue-title">{i18n.t('channel.upload.progress')}</h4>
 						{#each uploadQueue as item (item.file.name + item.file.size)}
 							<FileUploadProgress {item} />
 						{/each}
@@ -396,7 +400,7 @@
 							disabled={selectedFiles.every((f) => f.error) || isUploading}
 						>
 							{isUploading
-								? '上传中...'
+								? i18n.t('channel.upload.uploading')
 								: `${i18n.t('channel.upload.upload')} (${selectedFiles.filter((f) => !f.error).length})`}
 						</button>
 					{/if}
@@ -414,7 +418,7 @@
 				{#if isUploadingText && textUploadProgress > 0}
 					<div class="text-upload-progress">
 						<div class="progress-info">
-							<span>发送中...</span>
+							<span>{i18n.t('channel.text.sending')}</span>
 							<span>{Math.round(textUploadProgress)}%</span>
 						</div>
 						<div class="progress-bar-container">
@@ -428,7 +432,7 @@
 					onclick={shareTxt}
 					disabled={!txt.trim() || isUploadingText}
 				>
-					{isUploadingText ? '发送中...' : i18n.t('channel.text.send')}
+					{isUploadingText ? i18n.t('channel.text.sending') : i18n.t('channel.text.send')}
 				</button>
 			</div>
 		{/if}
