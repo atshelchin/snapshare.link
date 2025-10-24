@@ -1,8 +1,8 @@
 :root {
 	/* 亮色模式 */
 	--bg-body: var(--brand-100);
-	--bg-gradient-start: var(--brand-600);
-	--bg-gradient-end: var(--brand-700);
+	--bg-gradient-start: var(--brand-700);
+	--bg-gradient-end: var(--brand-600);
 	--container-bg: var(--color-background);
 	--header-text: var(--color-primary-foreground);
 	/* --text-primary: #333333;

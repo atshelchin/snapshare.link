@@ -37,7 +37,7 @@
 	}
 	.content {
 		min-height: calc(100vh - 190px);
-		background-color: var(--color-panel-2);
+		background-color: var(--color-panel-1);
 	}
 	@media (max-width: 768px) {
 		.container {
