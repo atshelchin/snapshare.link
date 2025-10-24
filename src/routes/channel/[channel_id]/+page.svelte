@@ -101,8 +101,10 @@
 		validationError = '';
 		rateLimitError = '';
 
+		// 先添加所有文件到列表（包括有效和无效的）
 		if (result.invalid.length > 0) {
 			selectedFiles = [
+				...selectedFiles,
 				...result.valid.map((file) => ({ file })),
 				...result.invalid.map((item) => ({ file: item.file, error: item.error }))
 			];
@@ -111,14 +113,46 @@
 				validationError = result.invalid[0].error;
 			}
 		} else {
-			selectedFiles = result.valid.map((file) => ({ file }));
+			selectedFiles = [...selectedFiles, ...result.valid.map((file) => ({ file }))];
 		}
+
+		// 检查总文件数是否超过限制
+		const currentValidFiles = selectedFiles.filter((f) => !f.error);
+		if (currentValidFiles.length > 10) {
+			const toDelete = currentValidFiles.length - 10;
+			validationError = `${i18n.t('channel.upload.maxFiles')} ${currentValidFiles.length} ${i18n.t('channel.upload.filesSelected')}, ${i18n.t('channel.upload.pleaseDelete')} ${toDelete} ${i18n.t('channel.upload.files')}`;
+		}
+
+		// 清空 input 以允许重复选择同一文件
+		input.value = '';
 	}
 
 	// 移除文件
 	function removeFile(index: number) {
 		selectedFiles = selectedFiles.filter((_, i) => i !== index);
-		validationError = '';
+
+		// 重新检查文件数量限制
+		const currentValidFiles = selectedFiles.filter((f) => !f.error);
+		if (currentValidFiles.length > 10) {
+			const toDelete = currentValidFiles.length - 10;
+			validationError = `${i18n.t('channel.upload.maxFiles')} ${currentValidFiles.length} ${i18n.t('channel.upload.filesSelected')}, ${i18n.t('channel.upload.pleaseDelete')} ${toDelete} ${i18n.t('channel.upload.files')}`;
+		} else {
+			// 当文件数量 <= 10 时，重新验证所有文件
+			validationError = '';
+			const files = selectedFiles.map((f) => f.file);
+			const result = validateFiles(files);
+
+			// 更新文件列表，重新标记错误
+			selectedFiles = [
+				...result.valid.map((file) => ({ file })),
+				...result.invalid.map((item) => ({ file: item.file, error: item.error }))
+			];
+
+			// 如果有无效文件，显示第一个错误
+			if (result.invalid.length > 0 && result.valid.length === 0) {
+				validationError = result.invalid[0].error;
+			}
+		}
 	}
 
 	// 分享文件
@@ -397,7 +431,9 @@
 						<button
 							class="button button-primary"
 							onclick={shareFiles}
-							disabled={selectedFiles.every((f) => f.error) || isUploading}
+							disabled={selectedFiles.every((f) => f.error) ||
+								isUploading ||
+								selectedFiles.filter((f) => !f.error).length > 10}
 						>
 							{isUploading
 								? i18n.t('channel.upload.uploading')

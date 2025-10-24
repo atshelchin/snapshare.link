@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Sun, Moon } from '@lucide/svelte';
 	import { useTheme } from '../stores/theme.svelte';
+	import { useI18n } from '@shelchin/i18n/svelte';
 
 	interface Props {
 		size?: 'sm' | 'md' | 'lg';
@@ -12,6 +13,7 @@
 
 	// Use global theme store
 	const themeStore = useTheme();
+	const i18n = useI18n();
 
 	// Size mapping
 	const sizeMap = {
@@ -32,15 +34,21 @@
 
 <div class="theme-toggle-wrapper" data-position={labelPosition}>
 	{#if showLabel && labelPosition === 'left'}
-		<span class="theme-label">{themeStore.theme === 'light' ? '浅色' : '深色'}</span>
+		<span class="theme-label">
+			{themeStore.theme === 'light' ? i18n.t('theme.light') : i18n.t('theme.dark')}
+		</span>
 	{/if}
 
 	<button
 		class="theme-toggle theme-toggle-{size}"
 		onclick={themeStore.toggleTheme}
 		onkeydown={handleKeyDown}
-		aria-label={themeStore.theme === 'light' ? '切换到暗色模式' : '切换到亮色模式'}
-		title={themeStore.theme === 'light' ? '切换到暗色模式' : '切换到亮色模式'}
+		aria-label={themeStore.theme === 'light'
+			? i18n.t('theme.switchToDark')
+			: i18n.t('theme.switchToLight')}
+		title={themeStore.theme === 'light'
+			? i18n.t('theme.switchToDark')
+			: i18n.t('theme.switchToLight')}
 		style="--button-size: {currentSize.button}"
 	>
 		<div class="icon-wrapper" data-theme={themeStore.theme}>
@@ -53,7 +61,9 @@
 	</button>
 
 	{#if showLabel && labelPosition === 'right'}
-		<span class="theme-label">{themeStore.theme === 'light' ? '浅色' : '深色'}</span>
+		<span class="theme-label">
+			{themeStore.theme === 'light' ? i18n.t('theme.light') : i18n.t('theme.dark')}
+		</span>
 	{/if}
 </div>
 

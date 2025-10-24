@@ -21,6 +21,23 @@
 			"scantojoin": "扫码进入频道"
 		}
 	},
+	"theme": {
+		"light": "浅色",
+		"dark": "深色",
+		"switchToDark": "切换到暗色模式",
+		"switchToLight": "切换到亮色模式"
+	},
+	"modal": {
+		"close": "关闭"
+	},
+	"upload": {
+		"status": {
+			"waiting": "等待中",
+			"uploading": "上传中",
+			"success": "完成",
+			"error": "失败"
+		}
+	},
 	"channel": {
 		"notice": {
 			"title": "文件自动过期",
@@ -46,7 +63,10 @@
 			"uploadError": "上传过程中发生错误",
 			"networkError": "网络错误",
 			"uploadCanceled": "上传已取消",
-			"addFileFailed": "添加文件记录失败"
+			"addFileFailed": "添加文件记录失败",
+			"maxFiles": "最多只能上传 10 个文件，当前已选择",
+			"filesSelected": "个",
+			"pleaseDelete": "请删除"
 		},
 		"text": {
 			"placeholder": "输入要分享的文本内容...",

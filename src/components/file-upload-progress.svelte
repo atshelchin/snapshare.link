@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { useI18n } from '@shelchin/i18n/svelte';
+
 	export interface UploadProgress {
 		file: File;
 		status: 'waiting' | 'uploading' | 'success' | 'error';
@@ -7,6 +9,7 @@
 	}
 
 	let { item } = $props<{ item: UploadProgress }>();
+	const i18n = useI18n();
 
 	// 格式化文件大小
 	function formatFileSize(bytes: number): string {
@@ -37,13 +40,13 @@
 	function getStatusText(status: string): string {
 		switch (status) {
 			case 'waiting':
-				return '等待中';
+				return i18n.t('upload.status.waiting');
 			case 'uploading':
-				return '上传中';
+				return i18n.t('upload.status.uploading');
 			case 'success':
-				return '完成';
+				return i18n.t('upload.status.success');
 			case 'error':
-				return '失败';
+				return i18n.t('upload.status.error');
 			default:
 				return '';
 		}

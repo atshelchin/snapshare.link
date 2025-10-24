@@ -21,6 +21,23 @@
 			"scantojoin": "Scan to Join"
 		}
 	},
+	"theme": {
+		"light": "Light",
+		"dark": "Dark",
+		"switchToDark": "Switch to dark mode",
+		"switchToLight": "Switch to light mode"
+	},
+	"modal": {
+		"close": "Close"
+	},
+	"upload": {
+		"status": {
+			"waiting": "Waiting",
+			"uploading": "Uploading",
+			"success": "Completed",
+			"error": "Failed"
+		}
+	},
 	"channel": {
 		"notice": {
 			"title": "Files Auto Expire",
@@ -46,7 +63,10 @@
 			"uploadError": "Error occurred during upload",
 			"networkError": "Network error",
 			"uploadCanceled": "Upload canceled",
-			"addFileFailed": "Failed to add file record"
+			"addFileFailed": "Failed to add file record",
+			"maxFiles": "Maximum 10 files allowed, currently selected",
+			"filesSelected": "",
+			"pleaseDelete": "please delete"
 		},
 		"text": {
 			"placeholder": "Enter text content to share...",

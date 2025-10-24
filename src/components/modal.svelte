@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { useI18n } from '@shelchin/i18n/svelte';
 
 	import type { Snippet } from 'svelte';
+
+	const i18n = useI18n();
 
 	interface Props {
 		open?: boolean;
@@ -245,7 +248,7 @@
 		{#if title}
 			<div class="modal-header">
 				<h2 id="modal-title" class="modal-title">{title}</h2>
-				<button class="modal-close" onclick={handleClose} aria-label="关闭">
+				<button class="modal-close" onclick={handleClose} aria-label={i18n.t('modal.close')}>
 					<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor">
 						<path d="M15 5L5 15M5 5l10 10" stroke-width="2" stroke-linecap="round" />
 					</svg>
