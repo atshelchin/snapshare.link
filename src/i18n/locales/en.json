@@ -1,0 +1,11 @@
+{
+	"_meta": {
+		"name": "English",
+		"englishName": "English",
+		"direction": "ltr",
+		"flag": "🇬🇧",
+		"code": "en"
+	},
+	"welcome": "Welcome",
+	"connect": "Connect"
+}

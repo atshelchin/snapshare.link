@@ -1,0 +1,687 @@
+/* design-tokens.css */
+/* ===================================
+   跨平台设计系统 - 100% SwiftUI 兼容版
+   Cross-Platform Design System - 100% SwiftUI Compatible
+   =================================== */
+
+/* 核心配置变量 Core Configuration */
+:root {
+	/* 用户配置 User Configuration */
+	--brand-hue: 217; /* 主色调 Primary Hue (0-360) */
+	--brand-saturation: 91%; /* 饱和度 Saturation (0-100%) */
+	--radius-scale: 1; /* 圆角缩放 Radius Scale */
+	--spacing-scale: 1; /* 间距缩放 Spacing Scale */
+
+	/* 无障碍配置 Accessibility Configuration */
+	--font-scale: 1; /* 字体缩放 Font Scale */
+	--contrast-mode: normal; /* 对比度模式 Contrast Mode */
+	--letter-spacing: normal; /* 字间距 Letter Spacing */
+	--line-height: 1.6; /* 行高 Line Height */
+}
+
+/* 应用全局字体缩放 Apply Global Font Scale */
+html {
+	font-size: calc(16px * var(--font-scale));
+}
+
+/* ===================================
+   1. 色彩系统 Color System
+   =================================== */
+:root {
+	/* 品牌色 Brand Colors */
+	--brand-50: hsl(var(--brand-hue), var(--brand-saturation), 98%);
+	--brand-100: hsl(var(--brand-hue), var(--brand-saturation), 96%);
+	--brand-200: hsl(var(--brand-hue), var(--brand-saturation), 91%);
+	--brand-300: hsl(var(--brand-hue), var(--brand-saturation), 84%);
+	--brand-400: hsl(var(--brand-hue), var(--brand-saturation), 65%);
+	--brand-500: hsl(var(--brand-hue), var(--brand-saturation), 50%);
+	--brand-600: hsl(var(--brand-hue), var(--brand-saturation), 40%);
+	--brand-700: hsl(var(--brand-hue), var(--brand-saturation), 30%);
+	--brand-800: hsl(var(--brand-hue), var(--brand-saturation), 20%);
+	--brand-900: hsl(var(--brand-hue), var(--brand-saturation), 10%);
+
+	/* 中性色 Neutral Colors */
+	--gray-50: hsl(var(--brand-hue), 10%, 98%);
+	--gray-100: hsl(var(--brand-hue), 10%, 96%);
+	--gray-200: hsl(var(--brand-hue), 10%, 91%);
+	--gray-300: hsl(var(--brand-hue), 10%, 84%);
+	--gray-400: hsl(var(--brand-hue), 10%, 65%);
+	--gray-500: hsl(var(--brand-hue), 10%, 50%);
+	--gray-600: hsl(var(--brand-hue), 10%, 40%);
+	--gray-700: hsl(var(--brand-hue), 10%, 30%);
+	--gray-800: hsl(var(--brand-hue), 10%, 20%);
+	--gray-900: hsl(var(--brand-hue), 10%, 10%);
+
+	/* 语义色 - 亮色主题 Semantic Colors - Light Theme */
+	--color-primary: var(--brand-600);
+	--color-primary-foreground: #ffffff;
+	--color-secondary: var(--brand-100);
+	--color-secondary-foreground: var(--brand-700);
+	--color-muted: var(--gray-100);
+	--color-muted-foreground: var(--gray-600);
+	--color-success: #22c55e;
+	--color-danger: #ef4444;
+	--color-warning: #f59e0b;
+	--color-info: #3b82f6;
+
+	/* 功能色 Functional Colors */
+	--color-background: #ffffff;
+	--color-foreground: var(--gray-900);
+	--color-card: #ffffff;
+	--color-card-foreground: var(--gray-900);
+	--color-popover: #ffffff;
+	--color-popover-foreground: var(--gray-900);
+	--color-border: var(--gray-200);
+	--color-input: var(--gray-200);
+	--color-ring: hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.3);
+	--color-disabled: var(--gray-100);
+	--color-disabled-foreground: var(--gray-400);
+
+	/* 按钮色 Button Colors */
+	--color-button-primary: var(--brand-600);
+	--color-button-primary-foreground: #ffffff;
+	--color-button-secondary: var(--brand-100);
+	--color-button-secondary-foreground: var(--brand-700);
+	--color-button-disabled: var(--gray-100);
+	--color-button-disabled-foreground: var(--gray-600);
+
+	/* 状态色 Status Colors */
+	--color-positive: #22c55e;
+	--color-negative: #ef4444;
+	--color-neutral: var(--gray-600);
+	--color-code: var(--gray-800);
+}
+
+/* ===================================
+   2. 文字系统 Typography System
+   =================================== */
+:root {
+	/* 字体大小 Font Sizes */
+	--text-xs: 0.75rem; /* 12px */
+	--text-sm: 0.875rem; /* 14px */
+	--text-base: 1rem; /* 16px */
+	--text-lg: 1.125rem; /* 18px */
+	--text-xl: 1.25rem; /* 20px */
+	--text-2xl: 1.5rem; /* 24px */
+	--text-3xl: 1.875rem; /* 30px */
+	--text-4xl: 2.25rem; /* 36px */
+	--text-5xl: 3rem; /* 48px */
+	--text-6xl: 3.75rem; /* 60px */
+
+	/* 字重 Font Weights */
+	--font-thin: 100;
+	--font-light: 300;
+	--font-normal: 400;
+	--font-medium: 500;
+	--font-semibold: 600;
+	--font-bold: 700;
+	--font-extrabold: 800;
+	--font-black: 900;
+
+	/* 字体族 Font Families */
+	--font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+	--font-family-mono: 'SF Mono', Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* ===================================
+   3. 层级系统 Hierarchy System
+   =================================== */
+:root {
+	/* 标题层级 Heading Hierarchy */
+	--color-heading-1: var(--gray-900);
+	--color-heading-2: var(--gray-800);
+	--color-heading-3: var(--gray-700);
+	--color-heading-4: var(--gray-600);
+	--color-heading-5: var(--gray-500);
+	--color-heading-6: var(--gray-400);
+
+	/* 语义化标题 Semantic Headings */
+	--color-heading-primary: var(--brand-600);
+	--color-heading-muted: var(--gray-400);
+	--color-heading-success: var(--color-success);
+	--color-heading-danger: var(--color-danger);
+
+	/* 描述层级 Description Hierarchy */
+	--color-description-1: var(--gray-700);
+	--color-description-2: var(--gray-600);
+	--color-description-3: var(--gray-500);
+	--color-description-4: var(--gray-400);
+
+	/* 语义化描述 Semantic Descriptions */
+	--color-description-primary: var(--brand-500);
+	--color-description-muted: var(--gray-400);
+	--color-description-success: #22c55e;
+	--color-description-warning: #f59e0b;
+	--color-description-danger: #ef4444;
+
+	/* 数值层级 Value Hierarchy */
+	--color-value-1: var(--gray-900);
+	--color-value-2: var(--gray-800);
+	--color-value-3: var(--gray-700);
+	--color-value-4: var(--gray-600);
+	--color-value-5: var(--gray-500);
+	--color-value-6: var(--gray-400);
+
+	/* 语义化数值 Semantic Values */
+	--color-value-primary: var(--brand-600);
+	--color-value-positive: #22c55e;
+	--color-value-negative: #ef4444;
+	--color-value-neutral: var(--gray-600);
+	--color-value-code: var(--gray-800);
+
+	/* 面板层级 Panel Hierarchy */
+	--color-panel-0: var(--color-background);
+	--color-panel-1: hsl(var(--brand-hue), 10%, 98%);
+	--color-panel-2: hsl(var(--brand-hue), 12%, 95%);
+	--color-panel-3: hsl(var(--brand-hue), 14%, 92%);
+	--color-panel-4: hsl(var(--brand-hue), 16%, 88%);
+	--color-panel-5: hsl(var(--brand-hue), 18%, 84%);
+
+	/* 特殊面板 Special Panels */
+	--color-panel-elevated: #ffffff;
+	--color-panel-sunken: var(--gray-50);
+	--color-panel-accent: var(--brand-50);
+	--color-panel-muted: hsl(var(--brand-hue), 5%, 97%);
+
+	/* 面板边框 Panel Borders */
+	--color-panel-border-1: var(--gray-100);
+	--color-panel-border-2: var(--gray-200);
+	--color-panel-border-3: var(--gray-300);
+	--color-panel-border-4: var(--gray-400);
+	--color-panel-border-5: var(--gray-500);
+}
+
+/* ===================================
+   4. 间距系统 Spacing System
+   =================================== */
+:root {
+	--space-unit: calc(0.25rem * var(--spacing-scale));
+	--space-0: 0;
+	--space-0-5: calc(var(--space-unit) * 0.5); /* 2px */
+	--space-1: calc(var(--space-unit) * 1); /* 4px */
+	--space-1-5: calc(var(--space-unit) * 1.5); /* 6px */
+	--space-2: calc(var(--space-unit) * 2); /* 8px */
+	--space-2-5: calc(var(--space-unit) * 2.5); /* 10px */
+	--space-3: calc(var(--space-unit) * 3); /* 12px */
+	--space-3-5: calc(var(--space-unit) * 3.5); /* 14px */
+	--space-4: calc(var(--space-unit) * 4); /* 16px */
+	--space-5: calc(var(--space-unit) * 5); /* 20px */
+	--space-6: calc(var(--space-unit) * 6); /* 24px */
+	--space-7: calc(var(--space-unit) * 7); /* 28px */
+	--space-8: calc(var(--space-unit) * 8); /* 32px */
+	--space-9: calc(var(--space-unit) * 9); /* 36px */
+	--space-10: calc(var(--space-unit) * 10); /* 40px */
+	--space-12: calc(var(--space-unit) * 12); /* 48px */
+	--space-14: calc(var(--space-unit) * 14); /* 56px */
+	--space-16: calc(var(--space-unit) * 16); /* 64px */
+	--space-20: calc(var(--space-unit) * 20); /* 80px */
+	--space-24: calc(var(--space-unit) * 24); /* 96px */
+}
+
+/* ===================================
+   5. 圆角系统 Radius System
+   =================================== */
+:root {
+	--radius-base: calc(0.375rem * var(--radius-scale));
+	--radius-none: 0;
+	--radius-sm: calc(var(--radius-base) * 0.66); /* ~4px */
+	--radius: var(--radius-base); /* ~6px */
+	--radius-md: calc(var(--radius-base) * 1.33); /* ~8px */
+	--radius-lg: calc(var(--radius-base) * 2); /* ~12px */
+	--radius-xl: calc(var(--radius-base) * 3); /* ~18px */
+	--radius-2xl: calc(var(--radius-base) * 4); /* ~24px */
+	--radius-3xl: calc(var(--radius-base) * 5); /* ~30px */
+	--radius-full: 9999px;
+}
+
+/* ===================================
+   6. 阴影系统 Shadow System
+   =================================== */
+:root {
+	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+	--shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+	--shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	--shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+	--shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+	--shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+	--shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+	--shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+	--shadow-none: none;
+}
+
+/* ===================================
+   7. 暗色主题 Dark Theme
+   =================================== */
+[data-theme='dark'] {
+	/* 文字亮度控制 Text Brightness Control */
+	--text-brightness: 0.95;
+
+	/* 语义色 - 暗色主题 Semantic Colors - Dark Theme */
+	--color-primary: var(--brand-500);
+	--color-primary-foreground: var(--gray-900);
+	--color-secondary: var(--brand-900);
+	--color-secondary-foreground: var(--brand-200);
+	--color-muted: var(--gray-700);
+	--color-muted-foreground: var(--gray-400);
+	--color-success: #6ee7b7;
+	--color-danger: #fca5a5;
+	--color-warning: #fcd34d;
+	--color-info: #93c5fd;
+
+	/* 功能色 - 暗色主题 Functional Colors - Dark Theme */
+	--color-background: var(--gray-900);
+	--color-foreground: rgba(243, 244, 246, var(--text-brightness));
+	--color-card: var(--gray-800);
+	--color-card-foreground: var(--gray-100);
+	--color-popover: var(--gray-800);
+	--color-popover-foreground: var(--gray-100);
+	--color-border: var(--gray-700);
+	--color-input: var(--gray-700);
+	--color-ring: hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.3);
+	--color-disabled: var(--gray-800);
+	--color-disabled-foreground: var(--gray-600);
+
+	/* 按钮色 - 暗色主题 Button Colors - Dark Theme */
+	--color-button-primary: var(--brand-500);
+	--color-button-primary-foreground: var(--gray-300);
+	--color-button-secondary: var(--gray-800);
+	--color-button-secondary-foreground: var(--gray-300);
+	--color-button-disabled: var(--gray-700);
+	--color-button-disabled-foreground: var(--gray-400);
+
+	/* 状态色 - 暗色主题 Status Colors - Dark Theme */
+	--color-positive: #86efac;
+	--color-negative: #fca5a5;
+	--color-neutral: var(--gray-400);
+	--color-code: var(--gray-200);
+
+	/* 标题层级 - 暗色主题 Heading Hierarchy - Dark Theme */
+	--color-heading-1: var(--gray-100);
+	--color-heading-2: var(--gray-200);
+	--color-heading-3: var(--gray-300);
+	--color-heading-4: var(--gray-400);
+	--color-heading-5: var(--gray-500);
+	--color-heading-6: var(--gray-600);
+
+	/* 语义化标题 - 暗色主题 Semantic Headings - Dark Theme */
+	--color-heading-primary: var(--brand-400);
+	--color-heading-muted: var(--gray-500);
+	--color-heading-success: var(--color-success);
+	--color-heading-danger: var(--color-danger);
+
+	/* 描述层级 - 暗色主题 Description Hierarchy - Dark Theme */
+	--color-description-1: var(--gray-300);
+	--color-description-2: var(--gray-400);
+	--color-description-3: var(--gray-500);
+	--color-description-4: var(--gray-600);
+
+	/* 语义化描述 - 暗色主题 Semantic Descriptions - Dark Theme */
+	--color-description-primary: var(--brand-400);
+	--color-description-muted: var(--gray-600);
+	--color-description-success: #6ee7b7;
+	--color-description-warning: #fcd34d;
+	--color-description-danger: #fca5a5;
+
+	/* 数值层级 - 暗色主题 Value Hierarchy - Dark Theme */
+	--color-value-1: var(--gray-100);
+	--color-value-2: var(--gray-200);
+	--color-value-3: var(--gray-300);
+	--color-value-4: var(--gray-400);
+	--color-value-5: var(--gray-500);
+	--color-value-6: var(--gray-600);
+
+	/* 语义化数值 - 暗色主题 Semantic Values - Dark Theme */
+	--color-value-primary: var(--brand-400);
+	--color-value-positive: #86efac;
+	--color-value-negative: #fca5a5;
+	--color-value-neutral: var(--gray-400);
+	--color-value-code: var(--gray-200);
+
+	/* 面板层级 - 暗色主题 Panel Hierarchy - Dark Theme */
+	--color-panel-0: hsl(var(--brand-hue), 10%, 8%);
+	--color-panel-1: hsl(var(--brand-hue), 10%, 11%);
+	--color-panel-2: hsl(var(--brand-hue), 10%, 14%);
+	--color-panel-3: hsl(var(--brand-hue), 10%, 17%);
+	--color-panel-4: hsl(var(--brand-hue), 10%, 20%);
+	--color-panel-5: hsl(var(--brand-hue), 10%, 24%);
+
+	/* 特殊面板 - 暗色主题 Special Panels - Dark Theme */
+	--color-panel-elevated: hsl(var(--brand-hue), 10%, 15%);
+	--color-panel-sunken: hsl(var(--brand-hue), 10%, 10%);
+	--color-panel-accent: hsl(var(--brand-hue), 30%, 15%);
+	--color-panel-muted: hsl(var(--brand-hue), 5%, 13%);
+
+	/* 面板边框 - 暗色主题 Panel Borders - Dark Theme */
+	--color-panel-border-1: hsl(var(--brand-hue), 10%, 20%);
+	--color-panel-border-2: hsl(var(--brand-hue), 10%, 25%);
+	--color-panel-border-3: hsl(var(--brand-hue), 10%, 30%);
+	--color-panel-border-4: hsl(var(--brand-hue), 10%, 35%);
+	--color-panel-border-5: hsl(var(--brand-hue), 10%, 40%);
+}
+
+/* ===================================
+   8. 无障碍系统 Accessibility System
+   =================================== */
+
+/* 高对比度模式 High Contrast Mode */
+[data-contrast='high'] {
+	--color-primary: var(--brand-700);
+	--color-muted-foreground: var(--gray-700);
+	--color-border: var(--gray-400);
+	font-weight: 500;
+}
+
+[data-contrast='high'][data-theme='dark'] {
+	--color-primary: var(--brand-300);
+	--color-muted-foreground: var(--gray-300);
+	--color-border: var(--gray-600);
+}
+
+/* 超高对比度模式 Ultra High Contrast Mode */
+[data-contrast='ultra'] {
+	--color-background: #ffffff;
+	--color-foreground: #000000;
+	--color-primary: #000000;
+	--color-primary-foreground: #ffffff;
+	--color-secondary: #ffffff;
+	--color-secondary-foreground: #000000;
+	--color-border: #000000;
+	--color-muted: #f0f0f0;
+	--color-muted-foreground: #000000;
+	--color-button-primary: #000000;
+	--color-button-primary-foreground: #ffffff;
+	--color-button-secondary: #ffffff;
+	--color-button-secondary-foreground: #000000;
+	--color-card: #ffffff;
+	--color-panel-1: #f0f0f0;
+	--color-panel-2: #e0e0e0;
+	font-weight: 600;
+}
+
+[data-contrast='ultra'] * {
+	font-weight: 600 !important;
+}
+
+[data-contrast='ultra'] button,
+[data-contrast='ultra'] input,
+[data-contrast='ultra'] select,
+[data-contrast='ultra'] textarea {
+	border-width: 2px !important;
+	border-color: #000000 !important;
+}
+
+[data-contrast='ultra'][data-theme='dark'] {
+	--color-background: #000000;
+	--color-foreground: #ffffff;
+	--color-primary: #ffffff;
+	--color-primary-foreground: #000000;
+	--color-secondary: #000000;
+	--color-secondary-foreground: #ffffff;
+	--color-border: #ffffff;
+	--color-muted: #1a1a1a;
+	--color-muted-foreground: #ffffff;
+	--color-button-primary: #ffffff;
+	--color-button-primary-foreground: #000000;
+	--color-button-secondary: #000000;
+	--color-button-secondary-foreground: #ffffff;
+	--color-card: #000000;
+	--color-panel-1: #1a1a1a;
+	--color-panel-2: #2a2a2a;
+}
+
+[data-contrast='ultra'][data-theme='dark'] button,
+[data-contrast='ultra'][data-theme='dark'] input,
+[data-contrast='ultra'][data-theme='dark'] select,
+[data-contrast='ultra'][data-theme='dark'] textarea {
+	border-color: #ffffff !important;
+}
+
+/* 字间距设置 Letter Spacing Settings */
+[data-letter-spacing='wide'] {
+	letter-spacing: 0.025em;
+}
+
+[data-letter-spacing='wider'] {
+	letter-spacing: 0.05em;
+}
+
+[data-letter-spacing='widest'] {
+	letter-spacing: 0.1em;
+}
+
+/* 行高设置 Line Height Settings */
+[data-line-height='tight'] body,
+[data-line-height='tight'] p,
+[data-line-height='tight'] div {
+	line-height: 1.25 !important;
+}
+
+[data-line-height='normal'] body,
+[data-line-height='normal'] p,
+[data-line-height='normal'] div {
+	line-height: 1.6 !important;
+}
+
+[data-line-height='relaxed'] body,
+[data-line-height='relaxed'] p,
+[data-line-height='relaxed'] div {
+	line-height: 1.8 !important;
+}
+
+[data-line-height='loose'] body,
+[data-line-height='loose'] p,
+[data-line-height='loose'] div {
+	line-height: 2.2 !important;
+}
+
+/* 字体大小预设 Font Size Presets */
+[data-font-size='small'] {
+	--font-scale: 0.875;
+}
+
+[data-font-size='normal'] {
+	--font-scale: 1;
+}
+
+[data-font-size='large'] {
+	--font-scale: 1.125;
+}
+
+[data-font-size='x-large'] {
+	--font-scale: 1.25;
+}
+
+[data-font-size='xx-large'] {
+	--font-scale: 1.5;
+}
+
+/* ===================================
+   基础样式 Base Styles
+   =================================== */
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: var(--font-family-sans);
+	font-size: var(--text-base);
+	line-height: 1.6;
+	color: var(--color-foreground);
+	background: var(--color-background);
+	transition:
+		color 200ms ease,
+		background-color 200ms ease;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* 聚焦样式 Focus Styles */
+*:focus-visible {
+	outline: 3px solid var(--color-ring);
+	outline-offset: 2px;
+}
+
+/* 响应系统偏好 Respond to System Preferences */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		--color-background: var(--gray-900);
+		--color-foreground: var(--gray-100);
+		--color-card: var(--gray-800);
+		--color-primary: var(--brand-500);
+		--color-primary-foreground: var(--gray-900);
+		--color-secondary: var(--brand-900);
+		--color-secondary-foreground: var(--brand-200);
+		--color-muted: var(--gray-700);
+		--color-muted-foreground: var(--gray-400);
+		--color-border: var(--gray-700);
+	}
+}
+
+@media (prefers-contrast: high) {
+	:root {
+		--color-primary: var(--brand-700);
+		--color-border: var(--gray-400);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* 实用类 Utility Classes */
+.text-xs {
+	font-size: var(--text-xs);
+}
+.text-sm {
+	font-size: var(--text-sm);
+}
+.text-base {
+	font-size: var(--text-base);
+}
+.text-lg {
+	font-size: var(--text-lg);
+}
+.text-xl {
+	font-size: var(--text-xl);
+}
+.text-2xl {
+	font-size: var(--text-2xl);
+}
+.text-3xl {
+	font-size: var(--text-3xl);
+}
+.text-4xl {
+	font-size: var(--text-4xl);
+}
+.text-5xl {
+	font-size: var(--text-5xl);
+}
+.text-6xl {
+	font-size: var(--text-6xl);
+}
+
+.font-thin {
+	font-weight: var(--font-thin);
+}
+.font-light {
+	font-weight: var(--font-light);
+}
+.font-normal {
+	font-weight: var(--font-normal);
+}
+.font-medium {
+	font-weight: var(--font-medium);
+}
+.font-semibold {
+	font-weight: var(--font-semibold);
+}
+.font-bold {
+	font-weight: var(--font-bold);
+}
+.font-extrabold {
+	font-weight: var(--font-extrabold);
+}
+.font-black {
+	font-weight: var(--font-black);
+}
+
+/* 标题样式 Heading Styles */
+h1,
+.h1 {
+	color: var(--color-heading-1);
+}
+h2,
+.h2 {
+	color: var(--color-heading-2);
+}
+h3,
+.h3 {
+	color: var(--color-heading-3);
+}
+h4,
+.h4 {
+	color: var(--color-heading-4);
+}
+h5,
+.h5 {
+	color: var(--color-heading-5);
+}
+h6,
+.h6 {
+	color: var(--color-heading-6);
+}
+
+.heading-primary {
+	color: var(--color-heading-primary);
+}
+.heading-muted {
+	color: var(--color-heading-muted);
+}
+
+/* 面板样式 Panel Styles */
+.panel-0 {
+	background: var(--color-panel-0);
+}
+.panel-1 {
+	background: var(--color-panel-1);
+	border: 1px solid var(--color-panel-border-1);
+}
+.panel-2 {
+	background: var(--color-panel-2);
+	border: 1px solid var(--color-panel-border-2);
+}
+.panel-3 {
+	background: var(--color-panel-3);
+	border: 1px solid var(--color-panel-border-3);
+}
+.panel-4 {
+	background: var(--color-panel-4);
+	border: 1px solid var(--color-panel-border-4);
+}
+.panel-5 {
+	background: var(--color-panel-5);
+	border: 1px solid var(--color-panel-border-5);
+}
+
+.panel-elevated {
+	background: var(--color-panel-elevated);
+	box-shadow: var(--shadow-lg);
+}
+.panel-sunken {
+	background: var(--color-panel-sunken);
+	box-shadow: var(--shadow-inner);
+}
+.panel-accent {
+	background: var(--color-panel-accent);
+	border: 1px solid var(--brand-100);
+}
+.panel-muted {
+	background: var(--color-panel-muted);
+}

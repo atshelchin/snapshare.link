@@ -14,6 +14,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.914.0
         version: 3.914.0
+      '@shelchin/i18n':
+        specifier: 0.0.3-dev.20251016115159.4e313f3
+        version: 0.0.3-dev.20251016115159.4e313f3(svelte@5.41.0)
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1171,6 +1174,11 @@ packages:
     resolution: {integrity: sha512-TAcgQh2sSkykPRWLrdyy2AiceMckNf5loITqXxFI5VuQjS5tSuw3WlwdN8qv8vzjLAUTvYaH/mVjSFpbkFbpTg==}
     cpu: [x64]
     os: [win32]
+
+  '@shelchin/i18n@0.0.3-dev.20251016115159.4e313f3':
+    resolution: {integrity: sha512-6b3uYV9p21/KVY40Fco9OuWBN88hEI0gGN0LLxG5ZpaJwoQT5WxoXe8qKLvBDv8iX/8rIkad+olMqf4uog5tdw==}
+    peerDependencies:
+      svelte: ^5.0.0
 
   '@sindresorhus/is@7.1.0':
     resolution: {integrity: sha512-7F/yz2IphV39hiS2zB4QYVkivrptHHh0K8qJJd9HhuWSdvf8AN7NpebW3CcDZDBQsUPMoDKWsY2WWgW7bqOcfA==}
@@ -3826,6 +3834,10 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.52.5':
     optional: true
+
+  '@shelchin/i18n@0.0.3-dev.20251016115159.4e313f3(svelte@5.41.0)':
+    dependencies:
+      svelte: 5.41.0
 
   '@sindresorhus/is@7.1.0': {}
 

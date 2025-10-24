@@ -1,0 +1,11 @@
+{
+	"_meta": {
+		"code": "zh",
+		"name": "中文",
+		"englishName": "Chinese",
+		"direction": "ltr",
+		"flag": "🇨🇳"
+	},
+	"welcome": "你好",
+	"connect": "连接"
+}
