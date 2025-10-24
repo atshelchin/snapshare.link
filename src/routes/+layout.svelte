@@ -37,8 +37,8 @@
 	}
 	.content {
 		padding: 30px;
-		min-height: 400px;
-		background-color: var(--color-panel-1);
+		min-height: 600px;
+		background-color: var(--color-panel-0);
 	}
 	@media (max-width: 768px) {
 		.container {

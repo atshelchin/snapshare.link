@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { textToFile, genUploadUrls, uploadWithPUT, addFile } from '$lib';
+	import ChannelHeader from '../../../components/channel-header.svelte';
+
 	let { params } = $props();
+
+	const channel_id = params.channel_id;
 
 	let txt = $state('');
 	let files = $state<FileList | undefined>();
@@ -90,7 +94,7 @@
 	};
 </script>
 
-channel_id:{params.channel_id}
+<ChannelHeader {channel_id} />
 
 <textarea bind:value={txt} />
 <button onclick={shareTxt}> 分享 文本</button>

@@ -8,12 +8,13 @@
 	--border-color: #e0e0e0;
 	--text-primary: #333333;
 	--button-hover-shadow-color: var(--brand-200);
+	--item-bg: #f9f9f9;
 	/* 
             --text-secondary: #666666;
             --text-muted: #999999;
         
             --upload-hover-bg: #f9f9ff;
-            --item-bg: #f9f9f9;
+        
             --header-text: #ffffff; */
 }
 
@@ -28,12 +29,13 @@
 	--text-primary: #e0e0e0;
 	--color-button-primary: var(--gray-800);
 	--button-hover-shadow-color: var(--gray-800);
+	--item-bg: #2a2a2a;
 	/*
             --text-secondary: #b0b0b0;
             --text-muted: #808080;
   
             --upload-hover-bg: #2a2a2a;
-            --item-bg: #2a2a2a;
+        
             --header-text: #ffffff; */
 }
 
