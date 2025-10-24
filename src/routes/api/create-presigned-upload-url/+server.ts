@@ -5,8 +5,9 @@ import { createPresignedUploadUrl, hashIP } from '$lib';
 const RATE_LIMIT = {
 	MAX_FILES_PER_HOUR: 100, // 每小时最多上传 100 个文件
 	MAX_FILES_PER_DAY: 500, // 每天最多上传 500 个文件
-	MAX_SIZE_PER_HOUR: 1000 * 1024 * 1024, // 每小时最多 1000MB
-	MAX_SIZE_PER_DAY: 10 * 1024 * 1024 * 1024 // 每天最多 10GB
+	MAX_SIZE_PER_HOUR: 1000 * 1024 * 1024, // 每小时最多 1000MB (单个IP)
+	MAX_SIZE_PER_DAY: 10 * 1024 * 1024 * 1024, // 每天最多 10GB (单个IP)
+	GLOBAL_MAX_SIZE_PER_HOUR: 100 * 1024 * 1024 * 1024 // 全站每小时最多 100GB
 };
 
 export const POST: RequestHandler = async ({ request, platform }) => {
@@ -32,6 +33,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const prefixDay = time.toISOString().slice(0, 10);
 		const KeyDay = uploader_hash_ip + ':' + prefixDay;
 		const KeyHour = uploader_hash_ip + ':' + prefixHour;
+		const GlobalKeyHour = 'global:' + prefixHour;
 
 		const valueHour = JSON.parse(await env.KV.get(KeyHour)) || {
 			fileSizeHour: 0,
@@ -43,7 +45,31 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			fileCountDay: 0
 		};
 
-		console.log({ valueDay, valueHour });
+		const globalValueHour = JSON.parse(await env.KV.get(GlobalKeyHour)) || {
+			globalFileSizeHour: 0
+		};
+
+		console.log({ valueDay, valueHour, globalValueHour });
+
+		// 检查全站每小时总大小限制
+		if (globalValueHour.globalFileSizeHour + fileSizeBytes > RATE_LIMIT.GLOBAL_MAX_SIZE_PER_HOUR) {
+			return Response.json(
+				{
+					success: false,
+					error: `Global rate limit exceeded: Maximum ${RATE_LIMIT.GLOBAL_MAX_SIZE_PER_HOUR / 1024 / 1024 / 1024}GB per hour for all users`,
+					limit: {
+						current: globalValueHour.globalFileSizeHour,
+						max: RATE_LIMIT.GLOBAL_MAX_SIZE_PER_HOUR,
+						requested: fileSizeBytes,
+						window: 'hour',
+						unit: 'bytes',
+						scope: 'global'
+					}
+				},
+				{ status: 429 }
+			);
+		}
+
 		// 检查每小时文件数量限制
 		if (valueHour.fileCountHour >= RATE_LIMIT.MAX_FILES_PER_HOUR) {
 			return Response.json(
@@ -127,16 +153,21 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			fileSizeHour: valueHour.fileSizeHour + fileSizeBytes,
 			fileCountHour: valueHour.fileCountHour + files.length
 		};
+		const newGlobalValueHour = {
+			globalFileSizeHour: globalValueHour.globalFileSizeHour + fileSizeBytes
+		};
 
 		await env.KV.put(KeyDay, JSON.stringify(newValueDay), { expirationTtl: 24 * 60 * 60 });
 		await env.KV.put(KeyHour, JSON.stringify(newValueHour), { expirationTtl: 60 * 60 });
+		await env.KV.put(GlobalKeyHour, JSON.stringify(newGlobalValueHour), { expirationTtl: 60 * 60 });
 
 		return Response.json({
 			success: true,
 			data: uploadUrlData,
 			limit: {
 				day: newValueDay,
-				hour: newValueHour
+				hour: newValueHour,
+				global: newGlobalValueHour
 			}
 		});
 	} catch (error) {
