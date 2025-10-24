@@ -58,6 +58,7 @@
 		"@aws-sdk/s3-request-presigner": "^3.914.0",
 		"@lucide/svelte": "^0.546.0",
 		"@shelchin/i18n": "0.0.3-dev.20251016115159.4e313f3",
-		"nanoid": "^5.1.6"
+		"nanoid": "^5.1.6",
+		"qr-code-styling": "^1.9.2"
 	}
 }

@@ -16,7 +16,9 @@
 		"channel": {
 			"headertitle": "Current channel",
 			"leave": "Leave",
-			"qr": "QR Code"
+			"qr": "QR Code",
+			"copylink": "Copy Link",
+			"scantojoin": "Scan to Join"
 		}
 	}
 }

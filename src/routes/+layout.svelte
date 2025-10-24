@@ -48,6 +48,7 @@
 		}
 
 		.content {
+			padding: 10px;
 			min-height: calc(100vh - 190px);
 		}
 	}

@@ -16,7 +16,9 @@
 		"channel": {
 			"headertitle": "当前频道",
 			"leave": "离开",
-			"qr": "二维码"
+			"qr": "二维码",
+			"copylink": "复制链接",
+			"scantojoin": "扫码进入频道"
 		}
 	}
 }
