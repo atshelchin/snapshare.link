@@ -46,21 +46,25 @@
 		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 	}
 
-	// 格式化时间
+	// 格式化时间 - 显示完整时间和时区
 	function formatTime(timestamp: number): string {
 		const date = new Date(timestamp);
-		const now = new Date();
-		const diff = now.getTime() - date.getTime();
-		const minutes = Math.floor(diff / 60000);
-		const hours = Math.floor(diff / 3600000);
-		const days = Math.floor(diff / 86400000);
 
-		if (minutes < 1) return i18n.t('channel.fileItem.justNow');
-		if (minutes < 60) return i18n.t('channel.fileItem.minutesAgo', { n: minutes });
-		if (hours < 24) return i18n.t('channel.fileItem.hoursAgo', { n: hours });
-		if (days < 7) return i18n.t('channel.fileItem.daysAgo', { n: days });
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		const hours = String(date.getHours()).padStart(2, '0');
+		const minutes = String(date.getMinutes()).padStart(2, '0');
+		const seconds = String(date.getSeconds()).padStart(2, '0');
 
-		return date.toLocaleDateString();
+		// 获取时区偏移（分钟）
+		const timezoneOffset = -date.getTimezoneOffset();
+		const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+		const offsetMinutes = Math.abs(timezoneOffset) % 60;
+		const offsetSign = timezoneOffset >= 0 ? '+' : '-';
+		const timezone = `GMT${offsetSign}${offsetHours}${offsetMinutes > 0 ? ':' + String(offsetMinutes).padStart(2, '0') : ''}`;
+
+		return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${timezone}`;
 	}
 
 	// 判断文件类型
@@ -88,6 +92,34 @@
 		}
 	}
 
+	// 检查文本是否为URL
+	function isUrl(text: string): boolean {
+		try {
+			const url = new URL(text.trim());
+			return url.protocol === 'http:' || url.protocol === 'https:';
+		} catch {
+			return false;
+		}
+	}
+
+	// 强制下载文件
+	async function handleDownload() {
+		try {
+			const response = await fetch(fileUrl);
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = file.file_name;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			window.URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('Download failed:', error);
+		}
+	}
+
 	// 如果是文本文件，自动加载内容
 	$effect(() => {
 		if (isText) {
@@ -105,6 +137,40 @@
 				<span class="file-size">{formatFileSize(file.file_size)}</span>
 				<span class="file-time">{formatTime(file.created_at)}</span>
 			</div>
+		</div>
+		<div class="file-actions">
+			<a
+				href={fileUrl}
+				target="_blank"
+				rel="noopener noreferrer"
+				class="icon-button"
+				title={i18n.t('channel.fileItem.open')}
+			>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+					<path
+						d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+						stroke-width="2"
+						stroke-linecap="round"
+					/>
+					<polyline points="15 3 21 3 21 9" stroke-width="2" stroke-linecap="round" />
+					<line x1="10" y1="14" x2="21" y2="3" stroke-width="2" stroke-linecap="round" />
+				</svg>
+			</a>
+			<button
+				onclick={handleDownload}
+				class="icon-button"
+				title={i18n.t('channel.fileItem.download')}
+			>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+					<path
+						d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+						stroke-width="2"
+						stroke-linecap="round"
+					/>
+					<polyline points="7 10 12 15 17 10" stroke-width="2" stroke-linecap="round" />
+					<line x1="12" y1="15" x2="12" y2="3" stroke-width="2" stroke-linecap="round" />
+				</svg>
+			</button>
 		</div>
 	</div>
 
@@ -128,25 +194,22 @@
 			{#if isLoadingText}
 				<div class="text-loading">{i18n.t('channel.fileItem.loading')}</div>
 			{:else if textContent}
-				<div class="text-preview">{textContent}</div>
+				{#if isUrl(textContent)}
+					<a
+						href={textContent.trim()}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="text-link"
+						data-sveltekit-preload-data="off"
+					>
+						{textContent}
+					</a>
+				{:else}
+					<div class="text-preview">{textContent}</div>
+				{/if}
 				<CopyButton value={textContent} label={i18n.t('channel.fileItem.copyText')} />
 			{/if}
 		{/if}
-	</div>
-
-	<div class="file-actions">
-		<a href={fileUrl} download={file.file_name} class="action-button download-button">
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-				<path
-					d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-					stroke-width="2"
-					stroke-linecap="round"
-				/>
-				<polyline points="7 10 12 15 17 10" stroke-width="2" stroke-linecap="round" />
-				<line x1="12" y1="15" x2="12" y2="3" stroke-width="2" stroke-linecap="round" />
-			</svg>
-			<span>{i18n.t('channel.fileItem.download')}</span>
-		</a>
 	</div>
 </div>
 
@@ -165,6 +228,7 @@
 	}
 
 	.file-header {
+		position: relative;
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-3);
@@ -200,8 +264,13 @@
 		font-weight: var(--font-medium);
 	}
 
+	.file-time {
+		font-size: var(--text-xs);
+		font-family: var(--font-family-mono, monospace);
+	}
+
 	.file-content {
-		margin-bottom: var(--space-4);
+		margin-bottom: var(--space-3);
 	}
 
 	/* 图片预览 */
@@ -268,35 +337,59 @@
 		font-size: var(--text-sm);
 	}
 
-	/* 操作按钮 */
-	.file-actions {
-		display: flex;
-		gap: var(--space-2);
-	}
-
-	.action-button {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-3) var(--space-4);
+	/* 文本链接 */
+	.text-link {
+		display: block;
+		padding: var(--space-4);
 		background: var(--color-panel-2);
-		color: var(--color-foreground);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
+		border-radius: var(--radius-md);
 		font-size: var(--text-sm);
-		font-weight: var(--font-medium);
+		color: var(--color-primary);
+		word-break: break-all;
+		margin-bottom: var(--space-3);
 		text-decoration: none;
-		cursor: pointer;
 		transition: all 0.2s ease;
 	}
 
-	.action-button:hover {
+	.text-link:hover {
 		background: var(--color-primary);
 		color: white;
 		border-color: var(--color-primary);
 	}
 
-	.download-button svg {
+	/* 操作按钮 */
+	.file-actions {
+		position: absolute;
+		top: 0;
+		right: 0;
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.icon-button {
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-panel-2);
+		color: var(--color-muted-foreground);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		text-decoration: none;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.icon-button:hover {
+		background: var(--color-primary);
+		color: white;
+		border-color: var(--color-primary);
+		transform: scale(1.1);
+	}
+
+	.icon-button svg {
 		flex-shrink: 0;
 	}
 </style>

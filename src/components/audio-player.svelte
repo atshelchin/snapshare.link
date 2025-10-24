@@ -300,7 +300,7 @@
 		height: 4px;
 		-webkit-appearance: none;
 		appearance: none;
-		background: var(--color-panel-2);
+		background: var(--gray-500);
 		border-radius: var(--radius-full);
 		outline: none;
 		cursor: pointer;
