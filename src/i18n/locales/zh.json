@@ -7,5 +7,8 @@
 		"flag": "🇨🇳"
 	},
 	"welcome": "你好",
-	"connect": "连接"
+	"connect": "连接",
+	"app": {
+		"description": "快速分享文件、文本、链接 - 无需登录"
+	}
 }

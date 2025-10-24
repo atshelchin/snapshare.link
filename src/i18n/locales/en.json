@@ -7,5 +7,8 @@
 		"code": "en"
 	},
 	"welcome": "Welcome",
-	"connect": "Connect"
+	"connect": "Connect",
+	"app": {
+		"description": "Quick File Sharing - No Login Required"
+	}
 }
