@@ -340,6 +340,7 @@
 			// Show completion
 			downloadProgress = { totalChunks: file.partsTotal || 0, completedChunks: file.partsTotal || 0, percent: 100, status: 'completed' };
 			downloadsUsed++;
+			loadFiles(); // refresh download counts
 		} catch { /* error via progress callback */ }
 		finally {
 			downloadingFile = null;
@@ -487,6 +488,7 @@
 								{:else if downloadProgress && downloadProgress.status === 'completed' && downloadPayingFile?.fileKey === file.fileKey}
 									<div class="download-complete-inline">
 										<span>✅ {i18n.t('vault.downloadComplete')}</span>
+										<span class="download-complete-name">{file.originalName || file.fileHash.slice(0, 12)}</span>
 									</div>
 								{:else}
 									<button
@@ -971,7 +973,11 @@
 	}
 
 	.download-complete-inline {
+		display: flex; flex-direction: column; gap: 2px;
 		font-size: var(--text-sm); color: hsl(120, 50%, 40%); font-weight: var(--font-medium);
+	}
+	.download-complete-name {
+		font-size: var(--text-xs); color: var(--color-muted-foreground); font-weight: normal;
 	}
 	.download-quota {
 		font-size: var(--text-sm); color: var(--color-muted-foreground);
