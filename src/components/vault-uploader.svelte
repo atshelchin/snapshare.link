@@ -153,6 +153,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					channelId,
+					fileName: selectedFile.name,
 					fileSize: selectedFile.size,
 					fileHash,
 					plan: selectedPlan
@@ -470,6 +471,8 @@
 			<div class="progress-actions">
 				{#if fileKey && uploadId}
 					<button class="button button-primary" onclick={retryUpload}>{i18n.t('vault.retry')}</button>
+				{:else if orderId}
+					<button class="button button-primary" onclick={startUpload}>{i18n.t('vault.retry')}</button>
 				{/if}
 				<button class="button button-secondary" onclick={resetState}>{i18n.t('vault.cancel')}</button>
 			</div>

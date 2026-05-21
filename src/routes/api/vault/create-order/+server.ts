@@ -14,7 +14,7 @@ import { generatePaymentAddress } from '$lib/payment';
 export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
 		const env = platform?.env as Record<string, string>;
-		const { channelId, fileSize, fileHash, plan = '30d' } = await request.json();
+		const { channelId, fileName, fileSize, fileHash, plan = '30d' } = await request.json();
 
 		if (!channelId || !fileSize || !fileHash) {
 			return Response.json(
@@ -61,6 +61,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		await db.insert(paidFiles).values({
 			file_key: orderId, // temporary PK, replaced when upload starts
 			order_id: orderId,
+			original_name: fileName || '',
 			payment_address: paymentAddress,
 			private_key: privateKeyHex,
 			channel_id: channelId,

@@ -109,7 +109,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const expiresAt = Date.now() + planConfig.days * 24 * 60 * 60 * 1000;
 
 		// Get pending record to preserve private_key
-		const pendingRecord = await db.select({ private_key: paidFiles.private_key })
+		const pendingRecord = await db.select({ private_key: paidFiles.private_key, original_name: paidFiles.original_name })
 			.from(paidFiles).where(eq(paidFiles.file_key, orderId)).limit(1).all();
 
 		// Replace the pending order record (created in create-order) with real upload record
@@ -117,6 +117,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		await db.insert(paidFiles).values({
 			file_key: fileKey,
 			order_id: orderId,
+			original_name: pendingRecord[0]?.original_name,
 			payment_address: order.paymentAddress,
 			private_key: pendingRecord[0]?.private_key,
 			channel_id: channelId,

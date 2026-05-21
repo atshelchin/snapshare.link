@@ -1,0 +1,1 @@
+ALTER TABLE `paid_files` ADD `original_name` text;

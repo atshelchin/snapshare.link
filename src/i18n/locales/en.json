@@ -100,7 +100,7 @@
 		"subtitle": "7/30-day storage, any file size, USDC payment",
 		"selectFile": "Select a file to upload",
 		"dragOrClick": "Click or drag file here",
-		"noSizeLimit": "No size limit · Max 4TB · Min 1GB billing",
+		"noSizeLimit": "Large file support · Up to 4TB per file · Min 1GB billing",
 		"loginWithPasskey": "Login with Passkey",
 		"pricing": "Pricing",
 		"pricePerGB": "From $0.01/GB",
@@ -143,6 +143,8 @@
 		"expiresIn": "Expires in",
 		"expired": "Expired",
 		"downloading": "Downloading & decrypting...",
+		"uploadPending": "Upload pending",
+		"paid": "Paid",
 		"vaultBrief": "7/30 days · E2E encrypted"
 	},
 	"privacy": {

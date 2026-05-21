@@ -28,6 +28,7 @@ export const paidFiles = sqliteTable(
 	{
 		file_key: text().primaryKey(),
 		order_id: text(), // nanoid
+		original_name: text(), // 用户原始文件名（加密前）
 		payment_address: text(), // 收款地址
 		private_key: text(), // 收款地址私钥 (hex), 用于归集
 		channel_id: text().notNull(),

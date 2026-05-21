@@ -21,9 +21,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			.limit(50)
 			.all();
 
-		// Only return non-expired, completed files
+		// Return non-expired files (completed + paid-but-pending for retry)
 		const activeFiles = files.filter(
-			(f) => f.upload_status === 'completed' && f.expires_at > now
+			(f) => f.expires_at > now && (f.upload_status === 'completed' || f.upload_status === 'pending' || f.upload_status === 'uploading')
 		);
 
 		return Response.json({
@@ -35,7 +35,10 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				encrypted: f.encrypted === 1,
 				plan: f.expires_at - f.created_at > 8 * 24 * 60 * 60 * 1000 ? '30d' : '7d',
 				expiresAt: f.expires_at,
-				createdAt: f.created_at
+				createdAt: f.created_at,
+				uploadStatus: f.upload_status,
+				orderId: f.order_id,
+				originalName: f.original_name
 			}))
 		});
 	} catch (error) {

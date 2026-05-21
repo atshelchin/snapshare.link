@@ -138,7 +138,9 @@
 		plan: string;
 		expiresAt: number;
 		createdAt: number;
-		// Client-side resolved
+		uploadStatus?: string;
+		orderId?: string;
+		originalName?: string;
 		displayName?: string;
 	}
 
@@ -283,18 +285,29 @@
 						<div class="vault-file-item">
 							<div class="vault-file-info">
 								<div class="vault-file-name">
-									🔒 {file.fileHash.slice(0, 16)}...
+									{#if file.uploadStatus === 'completed'}
+										🔒
+									{:else}
+										⏳
+									{/if}
+									{file.originalName || file.fileHash.slice(0, 16) + '...'}
 								</div>
 								<div class="vault-file-meta">
 									<span>{formatSize(file.fileSize)}</span>
 									<span>·</span>
 									<span>{file.plan}</span>
 									<span>·</span>
-									<span>{i18n.t('vault.expiresIn')} {formatTimeLeft(file.expiresAt)}</span>
+									{#if file.uploadStatus === 'completed'}
+										<span>{i18n.t('vault.expiresIn')} {formatTimeLeft(file.expiresAt)}</span>
+									{:else}
+										<span class="status-pending">{i18n.t('vault.uploadPending')}</span>
+									{/if}
 								</div>
 							</div>
 							<div class="vault-file-actions">
-								{#if downloadingFile === file.fileKey && downloadProgress}
+								{#if file.uploadStatus !== 'completed'}
+									<span class="status-badge">{i18n.t('vault.paid')}</span>
+								{:else if downloadingFile === file.fileKey && downloadProgress}
 									<div class="download-progress-mini">
 										<span>{Math.round(downloadProgress.percent)}%</span>
 										<button class="btn btn-secondary btn-small" onclick={cancelDownload}>
@@ -645,6 +658,9 @@
 		flex-shrink: 0;
 		margin-left: var(--space-3);
 	}
+
+	.status-pending { color: var(--color-primary); font-weight: var(--font-medium); }
+	.status-badge { font-size: var(--text-xs); font-weight: var(--font-semibold); color: hsl(120, 50%, 40%); background: hsl(120, 50%, 92%); padding: 2px 8px; border-radius: var(--radius-full); }
 
 	.download-progress-mini {
 		display: flex;

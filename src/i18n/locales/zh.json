@@ -100,7 +100,7 @@
 		"subtitle": "7/30 天存储，任意文件大小，USDC 支付",
 		"selectFile": "选择要上传的文件",
 		"dragOrClick": "点击或拖拽文件到这里",
-		"noSizeLimit": "不限大小 · 最大 4TB · 不足 1GB 按 1GB 计",
+		"noSizeLimit": "超大文件支持 · 最大 4TB · 不足 1GB 按 1GB 计",
 		"loginWithPasskey": "使用 Passkey 登录",
 		"pricing": "费用",
 		"pricePerGB": "低至 $0.01/GB",
@@ -143,6 +143,8 @@
 		"expiresIn": "剩余",
 		"expired": "已过期",
 		"downloading": "下载并解密中...",
+		"uploadPending": "待上传",
+		"paid": "已付款",
 		"vaultBrief": "7/30 天存储 · 端到端加密"
 	},
 	"privacy": {

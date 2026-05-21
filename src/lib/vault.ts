@@ -42,8 +42,8 @@ function createS3Client(env: VaultEnv): S3Client {
 	});
 }
 
-function getBucketName(env: VaultEnv, plan: StoragePlan): string {
-	return plan === '7d' ? env.PAID_BUCKET_7D : env.PAID_BUCKET_30D;
+function getBucketName(_env: VaultEnv, plan: StoragePlan): string {
+	return plan === '7d' ? 'paid-snapshare-7days' : 'paid-snapshare';
 }
 
 // Calculate price in USDC
