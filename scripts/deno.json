@@ -1,0 +1,9 @@
+{
+  "name": "@snapshare/download",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./mod.ts",
+  "imports": {
+    "@std/cli": "jsr:@std/cli@^1.0.0"
+  }
+}

@@ -150,8 +150,15 @@
 		"sessionExpired": "Upload session expired, recreating...",
 		"resumeDownload": "Resume",
 		"resumeDownloadTip": "Select a partially downloaded file to continue from where it left off",
-		"copyCommandTip": "Copy Deno CLI download command (supports resume)",
-		"commandCopied": "Download command copied! Paste it in your terminal.",
+		"downloadMethod": "Choose download method",
+		"recommended": "Recommended",
+		"cliDownload": "Terminal (CLI)",
+		"cliDesc": "Supports resume, hash verification, and faster speeds. Requires Deno runtime.",
+		"copyCommand": "Copy command",
+		"cliInstallHint": "Install Deno: curl -fsSL https://deno.land/install.sh | sh",
+		"browserDownload": "Browser",
+		"browserDesc": "Download directly in browser. Large files may be unreliable.",
+		"newDownload": "New download",
 		"vaultBrief": "7/30 days · E2E encrypted"
 	},
 	"privacy": {

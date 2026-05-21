@@ -150,8 +150,15 @@
 		"sessionExpired": "上传会话已过期，正在重新创建...",
 		"resumeDownload": "继续下载",
 		"resumeDownloadTip": "选择之前下载到一半的文件，从断点继续",
-		"copyCommandTip": "复制 Deno CLI 下载命令（支持断点续传）",
-		"commandCopied": "下载命令已复制！粘贴到终端运行即可。",
+		"downloadMethod": "选择下载方式",
+		"recommended": "推荐",
+		"cliDownload": "终端下载 (CLI)",
+		"cliDesc": "支持断点续传、哈希校验，速度更快。需要安装 Deno 运行时。",
+		"copyCommand": "复制命令",
+		"cliInstallHint": "安装 Deno: curl -fsSL https://deno.land/install.sh | sh",
+		"browserDownload": "浏览器下载",
+		"browserDesc": "直接在浏览器中下载。大文件可能不稳定。",
+		"newDownload": "全新下载",
 		"vaultBrief": "7/30 天存储 · 端到端加密"
 	},
 	"privacy": {

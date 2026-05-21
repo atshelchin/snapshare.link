@@ -247,14 +247,22 @@
 		downloadAbort?.abort();
 	}
 
+	let cliCommand = $state('');
+	let showCliModal = $state(false);
+	let cliModalFile = $state<VaultFile | null>(null);
+
 	async function copyDownloadCommand(file: VaultFile) {
 		if (!encryptionKey) return;
 		const keyStr = await exportKeyToBase64Url(encryptionKey);
 		const name = file.originalName || file.fileHash.slice(0, 12) + '.bin';
 		const url = `https://snapshare.link/d#key=${keyStr}&file=${encodeURIComponent(file.fileKey)}&name=${encodeURIComponent(name)}&parts=${file.partsTotal}&plan=${file.plan}&hash=${file.fileHash}`;
-		const cmd = `deno run -A jsr:@snapshare/download "${url}"`;
-		await navigator.clipboard.writeText(cmd);
-		alert(i18n.t('vault.commandCopied'));
+		cliCommand = `deno run -A jsr:@snapshare/download "${url}"`;
+		cliModalFile = file;
+		showCliModal = true;
+	}
+
+	async function copyCliToClipboard() {
+		await navigator.clipboard.writeText(cliCommand);
 	}
 
 	let resumeOrderId = $state('');
@@ -301,7 +309,7 @@
 		</div>
 
 		<div class="vault-content">
-			<VaultUploader channelId={vaultChannelId} {encryptionKey} {resumeOrderId} {resumeFileName} {resumeFileHash} />
+			<VaultUploader channelId={vaultChannelId} {encryptionKey} {resumeOrderId} {resumeFileName} {resumeFileHash} onUploadComplete={loadFiles} />
 		</div>
 
 		<!-- File list -->
@@ -363,30 +371,13 @@
 										{/if}
 									</div>
 								{:else}
-									<div class="download-buttons">
-										<button
-											class="btn btn-secondary btn-small"
-											onclick={() => handleDownload(file)}
-											disabled={!!downloadingFile}
-										>
-											{i18n.t('channel.fileItem.download')}
-										</button>
-										<button
-											class="btn btn-secondary btn-small"
-											onclick={() => handleDownload(file, true)}
-											disabled={!!downloadingFile}
-											title={i18n.t('vault.resumeDownloadTip')}
-										>
-											{i18n.t('vault.resumeDownload')}
-										</button>
-										<button
-											class="btn btn-secondary btn-small"
-											onclick={() => copyDownloadCommand(file)}
-											title={i18n.t('vault.copyCommandTip')}
-										>
-											CLI
-										</button>
-									</div>
+									<button
+										class="btn btn-secondary btn-small"
+										onclick={() => copyDownloadCommand(file)}
+										disabled={!!downloadingFile}
+									>
+										{i18n.t('channel.fileItem.download')}
+									</button>
 								{/if}
 							</div>
 						</div>
@@ -396,6 +387,46 @@
 
 		</div>
 	</div>
+
+	{#if showCliModal}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="cli-overlay" onclick={() => showCliModal = false} onkeydown={(e) => e.key === 'Escape' && (showCliModal = false)}>
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="cli-modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+				<h3 class="cli-modal-title">{i18n.t('vault.downloadMethod')}</h3>
+
+				<div class="download-option download-option-recommended">
+					<div class="download-option-badge">{i18n.t('vault.recommended')}</div>
+					<div class="download-option-title">{i18n.t('vault.cliDownload')}</div>
+					<p class="download-option-desc">{i18n.t('vault.cliDesc')}</p>
+					<div class="cli-command-box">
+						<code class="cli-command">{cliCommand}</code>
+					</div>
+					<button class="button button-primary" onclick={copyCliToClipboard}>
+						{i18n.t('vault.copyCommand')}
+					</button>
+					<p class="cli-install-hint">{i18n.t('vault.cliInstallHint')}</p>
+				</div>
+
+				<div class="download-option">
+					<div class="download-option-title">{i18n.t('vault.browserDownload')}</div>
+					<p class="download-option-desc">{i18n.t('vault.browserDesc')}</p>
+					<div class="download-option-btns">
+						<button class="button button-secondary" onclick={() => { showCliModal = false; handleDownload(cliModalFile!); }}>
+							{i18n.t('vault.newDownload')}
+						</button>
+						<button class="button button-secondary" onclick={() => { showCliModal = false; handleDownload(cliModalFile!, true); }}>
+							{i18n.t('vault.resumeDownload')}
+						</button>
+					</div>
+				</div>
+
+				<button class="cli-close" onclick={() => showCliModal = false}>
+					{i18n.t('modal.close')}
+				</button>
+			</div>
+		</div>
+	{/if}
 {:else}
 	<!-- Auth screen -->
 	<div class="vault-auth">
@@ -714,8 +745,6 @@
 	}
 
 	.status-pending { color: var(--color-primary); font-weight: var(--font-medium); }
-	.download-buttons { display: flex; gap: var(--space-1); }
-
 	.download-progress-inline {
 		display: flex;
 		flex-direction: column;
@@ -751,4 +780,44 @@
 		transition: width 0.3s ease;
 		border-radius: var(--radius-full);
 	}
+
+	/* CLI Download Modal */
+	.cli-overlay {
+		position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100;
+		display: flex; align-items: center; justify-content: center; padding: var(--space-4);
+	}
+	.cli-modal {
+		background: var(--color-panel-1); border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl); max-width: 520px; width: 100%;
+		padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);
+		max-height: 90vh; overflow-y: auto;
+	}
+	.cli-modal-title { font-size: var(--text-lg); font-weight: var(--font-semibold); color: var(--color-foreground); margin: 0; }
+	.download-option {
+		padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+		display: flex; flex-direction: column; gap: var(--space-2);
+	}
+	.download-option-recommended {
+		border-color: var(--color-primary); background: hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.05);
+	}
+	.download-option-badge {
+		display: inline-block; width: fit-content;
+		font-size: var(--text-xs); font-weight: var(--font-semibold);
+		color: white; background: var(--color-primary);
+		padding: 1px 8px; border-radius: var(--radius-full);
+	}
+	.download-option-title { font-weight: var(--font-semibold); color: var(--color-foreground); }
+	.download-option-desc { font-size: var(--text-sm); color: var(--color-muted-foreground); margin: 0; }
+	.download-option-btns { display: flex; gap: var(--space-2); }
+	.cli-command-box {
+		background: var(--color-panel-2); border: 1px solid var(--color-border);
+		border-radius: var(--radius-md); padding: var(--space-3); overflow-x: auto;
+	}
+	.cli-command { font-size: var(--text-xs); word-break: break-all; white-space: pre-wrap; }
+	.cli-install-hint { font-size: var(--text-xs); color: var(--color-muted-foreground); margin: 0; font-family: var(--font-family-mono, monospace); }
+	.cli-close {
+		background: none; border: none; color: var(--color-muted-foreground);
+		cursor: pointer; font-size: var(--text-sm); text-align: center;
+	}
+	.cli-close:hover { color: var(--color-foreground); }
 </style>

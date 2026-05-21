@@ -123,7 +123,7 @@ async function main() {
     expectedHash = parsed.fileHash;
     outDir = rawArgs[1]; // optional
   } else {
-    const { parseArgs } = await import("jsr:@std/cli/parse-args");
+    const { parseArgs } = await import("@std/cli/parse-args");
     const args = parseArgs(rawArgs, {
       string: ["url", "key", "name", "parts", "out"],
       alias: { u: "url", k: "key", n: "name", p: "parts", o: "out" },

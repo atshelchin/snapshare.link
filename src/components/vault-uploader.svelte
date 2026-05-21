@@ -12,12 +12,13 @@
 
 	type StoragePlan = '7d' | '30d';
 
-	let { channelId, encryptionKey, resumeOrderId = '', resumeFileName = '', resumeFileHash = '' } = $props<{
+	let { channelId, encryptionKey, resumeOrderId = '', resumeFileName = '', resumeFileHash = '', onUploadComplete } = $props<{
 		channelId: string;
 		encryptionKey: CryptoKey;
 		resumeOrderId?: string;
 		resumeFileName?: string;
 		resumeFileHash?: string;
+		onUploadComplete?: () => void;
 	}>();
 
 	// When resumeOrderId changes, enter resume mode — user needs to re-select the file
@@ -304,6 +305,7 @@
 
 			if (data.data.alreadyUploaded) {
 				uploadState = 'completed';
+				onUploadComplete?.();
 				return;
 			}
 
@@ -376,6 +378,7 @@
 				const data = await resp.json();
 				if (data.success) {
 					uploadState = 'completed';
+				onUploadComplete?.();
 					clearUploadState();
 					return;
 				}
