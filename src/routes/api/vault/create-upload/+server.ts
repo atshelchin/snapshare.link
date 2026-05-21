@@ -60,9 +60,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		if (orderData) {
 			order = JSON.parse(orderData);
 		} else {
-			// KV expired, recover from D1
-			const d1Order = await db.select().from(paidFiles)
-				.where(eq(paidFiles.file_key, orderId)).limit(1).all();
+			// KV expired, recover from D1 (check both file_key and order_id)
+			let d1Order = await db.select().from(paidFiles)
+				.where(eq(paidFiles.order_id, orderId)).limit(1).all();
+			if (!d1Order.length) {
+				d1Order = await db.select().from(paidFiles)
+					.where(eq(paidFiles.file_key, orderId)).limit(1).all();
+			}
 			if (!d1Order.length) {
 				return Response.json({ success: false, error: 'Order not found' }, { status: 404 });
 			}
@@ -122,10 +126,10 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		// Get pending record to preserve private_key
 		const pendingRecord = await db.select({ private_key: paidFiles.private_key, original_name: paidFiles.original_name })
-			.from(paidFiles).where(eq(paidFiles.file_key, orderId)).limit(1).all();
+			.from(paidFiles).where(eq(paidFiles.order_id, orderId)).limit(1).all();
 
-		// Replace the pending order record (created in create-order) with real upload record
-		await db.delete(paidFiles).where(eq(paidFiles.file_key, orderId));
+		// Replace the pending order record with real upload record
+		await db.delete(paidFiles).where(eq(paidFiles.order_id, orderId));
 		await db.insert(paidFiles).values({
 			file_key: fileKey,
 			order_id: orderId,

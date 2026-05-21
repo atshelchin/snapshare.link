@@ -127,6 +127,12 @@
 		}
 		isHashing = false;
 
+		// If resuming with existing fileKey/uploadId (page refresh), go straight to upload
+		if (fileKey && uploadId) {
+			await startUpload();
+			return;
+		}
+
 		// If resuming a paid order, verify file matches then upload
 		if (orderId) {
 			if (resumeFileHash && fileHash !== resumeFileHash) {
@@ -243,6 +249,13 @@
 		uploadState = 'uploading';
 		error = '';
 
+		// If we already have fileKey/uploadId (resumed from localStorage), skip create-upload
+		if (fileKey && uploadId) {
+			isPaused = false;
+			await uploadParts();
+			return;
+		}
+
 		try {
 			const resp = await fetch('/api/vault/create-upload', {
 				method: 'POST',
@@ -274,7 +287,8 @@
 			uploadId = data.data.uploadId;
 			partsTotal = data.data.partsTotal;
 			partsDone = data.data.partsDone || 0;
-			completedParts = [];
+			// Only reset completedParts for fresh uploads, not resumes
+			if (!data.data.resumed) completedParts = [];
 			currentPartProgress = 0;
 			isPaused = false;
 
@@ -286,42 +300,103 @@
 		}
 	}
 
+	const MAX_RETRIES = 3;
+	const RETRY_DELAY = 3000; // 3s
+
 	async function uploadParts() {
 		if (!selectedFile) return;
 
 		for (let partNum = partsDone + 1; partNum <= partsTotal; partNum++) {
 			if (isPaused) { uploadState = 'paused'; return; }
-			try {
-				await uploadSinglePart(partNum);
+
+			let success = false;
+			for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				try {
+					await uploadSinglePart(partNum);
+					success = true;
+					break;
+				} catch (e) {
+					if (isPaused) { uploadState = 'paused'; return; }
+					const msg = String(e);
+					// Upload session expired — recreate and restart from part 1
+					if (msg.includes('HTTP 404') || msg.includes('404')) {
+						error = i18n.t('vault.sessionExpired');
+						try {
+							await recreateUploadSession();
+							// Restart the loop from part 1
+							partNum = partsDone; // will become partsDone+1 on next iteration
+							break;
+						} catch (recreateErr) {
+							error = `Session recreate failed: ${recreateErr}`;
+							uploadState = 'failed';
+							return;
+						}
+					}
+					if (attempt < MAX_RETRIES) {
+						error = `Part ${partNum} failed (attempt ${attempt}/${MAX_RETRIES}), retrying...`;
+						await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
+					} else {
+						error = `Part ${partNum} failed after ${MAX_RETRIES} attempts: ${e}`;
+						uploadState = 'failed';
+						return;
+					}
+				}
+			}
+
+			if (success) {
 				partsDone = partNum;
 				currentPartProgress = 0;
+				error = '';
 				saveUploadState();
-			} catch (e) {
-				if (isPaused) { uploadState = 'paused'; return; }
-				error = `Part ${partNum}: ${e}`;
-				uploadState = 'failed';
-				return;
 			}
 		}
 
-		try {
-			const resp = await fetch('/api/vault/complete-upload', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ fileKey, uploadId, parts: completedParts, plan: selectedPlan })
-			});
-			const data = await resp.json();
-			if (data.success) {
-				uploadState = 'completed';
-				clearUploadState();
-			} else {
-				error = data.error;
-				uploadState = 'failed';
+		// Complete with retries
+		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+			try {
+				const resp = await fetch('/api/vault/complete-upload', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ fileKey, uploadId, parts: completedParts, plan: selectedPlan })
+				});
+				const data = await resp.json();
+				if (data.success) {
+					uploadState = 'completed';
+					clearUploadState();
+					return;
+				}
+				if (attempt === MAX_RETRIES) { error = data.error; uploadState = 'failed'; return; }
+			} catch (e) {
+				if (attempt === MAX_RETRIES) { error = String(e); uploadState = 'failed'; return; }
 			}
-		} catch (e) {
-			error = String(e);
-			uploadState = 'failed';
+			error = `Complete failed (attempt ${attempt}/${MAX_RETRIES}), retrying...`;
+			await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
 		}
+	}
+
+	async function recreateUploadSession(): Promise<void> {
+		// Upload session expired (404) — create a new one via create-upload
+		const resp = await fetch('/api/vault/create-upload', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				orderId, channelId,
+				fileName: selectedFile!.name,
+				fileSize: selectedFile!.size,
+				fileHash, encrypted: true,
+				plan: selectedPlan
+			})
+		});
+		const data = await resp.json();
+		if (!data.success) throw new Error(data.error || 'Failed to recreate upload session');
+		fileKey = data.data.fileKey;
+		uploadId = data.data.uploadId;
+		partsTotal = data.data.partsTotal;
+		// Reset progress — new session means all parts must be re-uploaded
+		partsDone = 0;
+		completedParts = [];
+		currentPartProgress = 0;
+		saveUploadState();
 	}
 
 	async function uploadSinglePart(partNumber: number): Promise<void> {
@@ -360,7 +435,8 @@
 			xhr.send(new Blob([chunkData]));
 		});
 
-		completedParts = [...completedParts, { partNumber, etag }];
+		// Avoid duplicates if retrying a part that partially succeeded
+		completedParts = [...completedParts.filter(p => p.partNumber !== partNumber), { partNumber, etag }];
 		abortController = null;
 	}
 
@@ -405,11 +481,40 @@
 
 	function saveUploadState() {
 		localStorage.setItem(`vault-upload:${channelId}`, JSON.stringify({
-			fileKey, uploadId, partsTotal, partsDone, completedParts, plan: selectedPlan
+			fileKey, uploadId, partsTotal, partsDone, completedParts, plan: selectedPlan, orderId
 		}));
 	}
 
 	function clearUploadState() { localStorage.removeItem(`vault-upload:${channelId}`); }
+
+	// Restore in-progress upload after page refresh
+	function loadUploadState() {
+		const saved = localStorage.getItem(`vault-upload:${channelId}`);
+		if (!saved) return;
+		try {
+			const state = JSON.parse(saved);
+			if (state.fileKey && state.uploadId && state.partsDone < state.partsTotal) {
+				fileKey = state.fileKey;
+				uploadId = state.uploadId;
+				partsTotal = state.partsTotal;
+				partsDone = state.partsDone;
+				completedParts = state.completedParts || [];
+				selectedPlan = state.plan || '7d';
+				orderId = state.orderId || '';
+				uploadState = 'paused';
+				error = i18n.t('vault.selectFileToResume');
+			} else {
+				// Stale state, clear it
+				clearUploadState();
+			}
+		} catch {
+			clearUploadState();
+		}
+	}
+
+	$effect(() => {
+		if (channelId) loadUploadState();
+	});
 </script>
 
 <div class="vault-uploader">
@@ -484,9 +589,16 @@
 				<span>{selectedFile?.name}</span>
 				<span>{i18n.t('vault.partProgress').replace('{done}', String(partsDone)).replace('{total}', String(partsTotal))}</span>
 			</div>
-			{#if error}<div class="vault-error">{error}</div>{/if}
+			{#if error}
+				<div class="vault-warning">{error}</div>
+			{/if}
 			<div class="progress-actions">
-				{#if uploadState === 'paused'}
+				{#if uploadState === 'paused' && !selectedFile}
+					<label class="button button-primary" style="cursor: pointer;">
+						📁 {i18n.t('vault.selectFile')}
+						<input type="file" hidden onchange={handleFileSelect} />
+					</label>
+				{:else if uploadState === 'paused'}
 					<button class="button button-primary" onclick={resumeUpload}>{i18n.t('vault.resume')}</button>
 				{:else}
 					<button class="button button-secondary" onclick={pauseUpload}>{i18n.t('vault.pause')}</button>
@@ -645,6 +757,7 @@
 	.button-secondary { background: var(--color-panel-2); color: var(--color-foreground); border: 1px solid var(--color-border); }
 	.button-danger { background: hsla(0, 70%, 50%, 0.1); color: var(--color-danger); border: 1px solid var(--color-danger); }
 	.vault-error { padding: var(--space-3); background: hsla(0, 70%, 50%, 0.1); border: 1px solid var(--color-danger); border-radius: var(--radius-md); color: var(--color-danger); font-size: var(--text-sm); }
+	.vault-warning { padding: var(--space-2) var(--space-3); background: hsla(40, 90%, 50%, 0.1); border: 1px solid hsla(40, 90%, 50%, 0.4); border-radius: var(--radius-md); color: hsla(40, 60%, 35%, 1); font-size: var(--text-xs); }
 	.vault-complete { text-align: center; padding: var(--space-6); }
 	.complete-icon { font-size: 3rem; margin-bottom: var(--space-2); }
 	.complete-title { font-size: var(--text-xl); font-weight: var(--font-semibold); color: var(--color-foreground); }

@@ -147,6 +147,7 @@
 		"paid": "Paid",
 		"selectFileToResume": "Please re-select the same file to resume upload",
 		"fileMismatch": "File does not match the original upload. Please select the correct file",
+		"sessionExpired": "Upload session expired, recreating...",
 		"vaultBrief": "7/30 days · E2E encrypted"
 	},
 	"privacy": {

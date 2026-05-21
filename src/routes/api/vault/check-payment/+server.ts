@@ -31,7 +31,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			const db = drizzle(platform?.env!.DB);
 			await db.update(paidFiles)
 				.set({ payment_tx: result.txHash })
-				.where(eq(paidFiles.file_key, orderId));
+				.where(eq(paidFiles.order_id, orderId));
 		}
 
 		return Response.json({

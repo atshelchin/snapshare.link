@@ -1,5 +1,6 @@
 // Data Vault: paid multipart upload utilities for large files
-// Uses R2 binding for server-side ops, S3 presigned URLs for client uploads
+// Uses S3-compatible API for R2 multipart uploads with presigned URLs
+// Server-side ops use raw fetch to avoid DOMParser issue in Workers
 
 import {
 	S3Client,
@@ -8,6 +9,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import type { Env } from '$lib';
+import { AwsV4Signer } from 'aws4fetch';
 
 // 100MB per part
 export const PART_SIZE = 100 * 1024 * 1024;
@@ -35,16 +37,19 @@ function createS3Client(env: VaultEnv): S3Client {
 		credentials: {
 			accessKeyId: env.ACCESS_KEY_ID,
 			secretAccessKey: env.SECRET_ACCESS_KEY
-		}
+		},
+		requestChecksumCalculation: 'WHEN_REQUIRED',
+		responseChecksumValidation: 'WHEN_REQUIRED',
 	});
-}
-
-function getBucket(env: VaultEnv, plan: StoragePlan): R2Bucket {
-	return plan === '7d' ? env.PAID_BUCKET_7D : env.PAID_BUCKET_30D;
 }
 
 function getBucketName(_env: VaultEnv, plan: StoragePlan): string {
 	return plan === '7d' ? 'paid-snapshare-7days' : 'paid-snapshare';
+}
+
+function getR2Endpoint(env: VaultEnv, plan: StoragePlan): string {
+	const bucket = getBucketName(env, plan);
+	return `https://${bucket}.${env.ACCOUNT_ID}.r2.cloudflarestorage.com`;
 }
 
 // Calculate price in USDC
@@ -76,7 +81,7 @@ export function calculateParts(fileSizeBytes: number): number {
 	return Math.ceil(fileSizeBytes / PART_SIZE);
 }
 
-// Create a multipart upload using R2 binding (no DOMParser needed)
+// Create a multipart upload via raw S3 API (avoids DOMParser)
 export async function createMultipartUpload(
 	env: VaultEnv,
 	fileName: string,
@@ -86,17 +91,40 @@ export async function createMultipartUpload(
 	const now = new Date();
 	const prefix = now.toISOString().slice(0, 10);
 	const fileKey = `vault/${prefix}/${uuid}`;
-	const bucket = getBucket(env, plan);
+	const endpoint = getR2Endpoint(env, plan);
 
-	const upload = await bucket.createMultipartUpload(fileKey, {
-		httpMetadata: { contentType: 'application/octet-stream' },
-		customMetadata: { 'original-name': encodeURIComponent(fileName) }
+	const signer = new AwsV4Signer({
+		accessKeyId: env.ACCESS_KEY_ID,
+		secretAccessKey: env.SECRET_ACCESS_KEY,
+		region: 'auto',
+		service: 's3',
+		url: `${endpoint}/${fileKey}?uploads`,
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/octet-stream',
+			'x-amz-meta-original-name': encodeURIComponent(fileName)
+		}
 	});
 
-	return { uploadId: upload.uploadId, fileKey };
+	const signed = await signer.sign();
+	const resp = await fetch(signed.url, {
+		method: 'POST',
+		headers: signed.headers
+	});
+
+	if (!resp.ok) {
+		const text = await resp.text();
+		throw new Error(`CreateMultipartUpload failed: ${resp.status} ${text}`);
+	}
+
+	const xml = await resp.text();
+	const uploadIdMatch = xml.match(/<UploadId>(.+?)<\/UploadId>/);
+	if (!uploadIdMatch) throw new Error('No UploadId in response');
+
+	return { uploadId: uploadIdMatch[1], fileKey };
 }
 
-// Generate a presigned URL for uploading a single part (S3 SDK, no XML parsing)
+// Generate a presigned URL for uploading a single part
 export async function getPartUploadUrl(
 	env: VaultEnv,
 	fileKey: string,
@@ -117,7 +145,7 @@ export async function getPartUploadUrl(
 	return getSignedUrl(s3, command, { expiresIn: 3600 });
 }
 
-// Complete the multipart upload using R2 binding
+// Complete the multipart upload via raw S3 API
 export async function completeMultipartUpload(
 	env: VaultEnv,
 	fileKey: string,
@@ -125,25 +153,57 @@ export async function completeMultipartUpload(
 	parts: { partNumber: number; etag: string }[],
 	plan: StoragePlan
 ): Promise<void> {
-	const bucket = getBucket(env, plan);
-	const upload = bucket.resumeMultipartUpload(fileKey, uploadId);
+	const endpoint = getR2Endpoint(env, plan);
+	const partsXml = parts
+		.map((p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${p.etag}</ETag></Part>`)
+		.join('');
+	const body = `<CompleteMultipartUpload>${partsXml}</CompleteMultipartUpload>`;
 
-	await upload.complete(
-		parts.map((p) => ({
-			partNumber: p.partNumber,
-			etag: p.etag
-		}))
-	);
+	const signer = new AwsV4Signer({
+		accessKeyId: env.ACCESS_KEY_ID,
+		secretAccessKey: env.SECRET_ACCESS_KEY,
+		region: 'auto',
+		service: 's3',
+		url: `${endpoint}/${fileKey}?uploadId=${uploadId}`,
+		method: 'POST',
+		headers: { 'Content-Type': 'application/xml' },
+		body
+	});
+
+	const signed = await signer.sign();
+	const resp = await fetch(signed.url, {
+		method: 'POST',
+		headers: signed.headers,
+		body
+	});
+
+	if (!resp.ok) {
+		const text = await resp.text();
+		throw new Error(`CompleteMultipartUpload failed: ${resp.status} ${text}`);
+	}
 }
 
-// Abort a multipart upload using R2 binding
+// Abort a multipart upload via raw S3 API
 export async function abortMultipartUpload(
 	env: VaultEnv,
 	fileKey: string,
 	uploadId: string,
 	plan: StoragePlan
 ): Promise<void> {
-	const bucket = getBucket(env, plan);
-	const upload = bucket.resumeMultipartUpload(fileKey, uploadId);
-	await upload.abort();
+	const endpoint = getR2Endpoint(env, plan);
+
+	const signer = new AwsV4Signer({
+		accessKeyId: env.ACCESS_KEY_ID,
+		secretAccessKey: env.SECRET_ACCESS_KEY,
+		region: 'auto',
+		service: 's3',
+		url: `${endpoint}/${fileKey}?uploadId=${uploadId}`,
+		method: 'DELETE'
+	});
+
+	const signed = await signer.sign();
+	await fetch(signed.url, {
+		method: 'DELETE',
+		headers: signed.headers
+	});
 }

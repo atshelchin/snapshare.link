@@ -62,6 +62,7 @@
 		"@noble/curves": "^2.2.0",
 		"@noble/hashes": "^2.2.0",
 		"@shelchin/i18n": "0.0.3-dev.20251016115159.4e313f3",
+		"aws4fetch": "^1.0.20",
 		"nanoid": "^5.1.6",
 		"qr-code-styling": "^1.9.2"
 	}
