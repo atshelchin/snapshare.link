@@ -79,11 +79,16 @@
 	let uploadTimeStr = $state('');
 
 	function updateUploadStats() {
-		if (!uploadStartTime || partsDone === 0) { uploadSpeedStr = ''; uploadTimeStr = ''; return; }
+		if (!uploadStartTime) { uploadSpeedStr = ''; uploadTimeStr = ''; return; }
 		const elapsed = (Date.now() - uploadStartTime) / 1000;
-		const bytesPerSec = (partsDone * partSize) / elapsed;
-		uploadSpeedStr = formatSize(bytesPerSec) + '/s';
-		const remaining = Math.ceil((elapsed / partsDone) * (partsTotal - partsDone));
+		if (elapsed < 1) return;
+		// Effective bytes uploaded: completed parts + current part progress
+		const effectiveBytes = (partsDone * partSize) + (currentPartProgress / 100 * partSize);
+		const bytesPerSec = effectiveBytes / elapsed;
+		uploadSpeedStr = bytesPerSec > 0 ? formatSize(bytesPerSec) + '/s' : '';
+		const totalBytes = partsTotal * partSize;
+		const remainingBytes = totalBytes - effectiveBytes;
+		const remaining = bytesPerSec > 0 ? Math.ceil(remainingBytes / bytesPerSec) : 0;
 		const eM = Math.floor(elapsed / 60), eS = Math.floor(elapsed % 60);
 		const rM = Math.floor(remaining / 60), rS = remaining % 60;
 		const eStr = eM > 0 ? `${eM}m${eS}s` : `${eS}s`;
