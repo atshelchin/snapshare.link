@@ -100,9 +100,6 @@
 
 	// Compute SHA-256 hash of file (streaming, low memory)
 	async function computeFileHash(file: File): Promise<string> {
-		const CHUNK = 8 * 1024 * 1024; // 8MB chunks for hashing
-		const chunks = Math.ceil(file.size / CHUNK);
-
 		// For files > 256MB, hash first+last 128MB for speed
 		if (file.size > 256 * 1024 * 1024) {
 			const head = await file.slice(0, 128 * 1024 * 1024).arrayBuffer();
@@ -270,9 +267,21 @@
 		error = '';
 		uploadStartTime = Date.now();
 
-		// If resuming from localStorage with existing fileKey, skip create-upload
+		// If resuming with existing fileKey, check which parts are already uploaded
 		if (fileKey && partsTotal > 0) {
 			isPaused = false;
+			try {
+				const checkResp = await fetch('/api/vault/check-parts', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ fileKey, partsTotal, plan: selectedPlan })
+				});
+				const checkData = await checkResp.json() as { success: boolean; data?: { uploaded: number[]; count: number } };
+				if (checkData.success && checkData.data) {
+					partsDone = checkData.data.count;
+					updateUploadStats();
+				}
+			} catch { /* proceed with local partsDone */ }
 			await uploadParts();
 			return;
 		}
@@ -341,45 +350,59 @@
 	async function uploadParts() {
 		if (!selectedFile) return;
 
-		const remaining: number[] = [];
-		for (let i = partsDone + 1; i <= partsTotal; i++) remaining.push(i);
-
-		let failed = false;
-		let failError = '';
-
-		async function worker() {
-			while (remaining.length > 0 && !failed && !isPaused) {
-				const partNum = remaining.shift()!;
-				try {
-					await uploadPartWithRetry(partNum);
-					partsDone++;
-					updateUploadStats();
-					saveUploadState();
-				} catch (e) {
-					if (isPaused || String(e) === 'Error: paused') return;
-					failed = true;
-					failError = `Part ${partNum}: ${e}`;
-				}
+		// Ask server which parts already exist
+		let uploadedSet = new Set<number>();
+		try {
+			const resp = await fetch('/api/vault/check-parts', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ fileKey, partsTotal, plan: selectedPlan })
+			});
+			const data = await resp.json() as { success: boolean; data?: { uploaded: number[] } };
+			if (data.success && data.data) {
+				uploadedSet = new Set(data.data.uploaded);
+				partsDone = uploadedSet.size;
+				updateUploadStats();
 			}
+		} catch { /* proceed assuming none uploaded */ }
+
+		// Build list of missing parts
+		const remaining: number[] = [];
+		for (let i = 1; i <= partsTotal; i++) {
+			if (!uploadedSet.has(i)) remaining.push(i);
 		}
 
-		// Launch concurrent workers
-		const workers = Array.from({ length: Math.min(CONCURRENCY, remaining.length) }, () => worker());
-		await Promise.all(workers);
+		if (remaining.length === 0) {
+			// All parts already uploaded, go to complete
+		} else {
+			let failed = false;
+			let failError = '';
 
-		if (isPaused) { uploadState = 'paused'; return; }
-		if (failed) {
-			error = failError;
-			// Try recreating session
-			try {
-				error = i18n.t('vault.sessionExpired');
-				await recreateUploadSession();
-				await uploadParts(); // restart
-			} catch {
+			async function worker() {
+				while (remaining.length > 0 && !failed && !isPaused) {
+					const partNum = remaining.shift()!;
+					try {
+						await uploadPartWithRetry(partNum);
+						partsDone++;
+						updateUploadStats();
+						saveUploadState();
+					} catch (e) {
+						if (isPaused || String(e) === 'Error: paused') return;
+						failed = true;
+						failError = `Part ${partNum}: ${e}`;
+					}
+				}
+			}
+
+			const workers = Array.from({ length: Math.min(CONCURRENCY, remaining.length) }, () => worker());
+			await Promise.all(workers);
+
+			if (isPaused) { uploadState = 'paused'; return; }
+			if (failed) {
 				error = failError;
 				uploadState = 'failed';
+				return;
 			}
-			return;
 		}
 
 		// Complete with retries
@@ -406,26 +429,7 @@
 		}
 	}
 
-	async function recreateUploadSession(): Promise<void> {
-		// Upload session expired (404) — create a new one via create-upload
-		const resp = await fetch('/api/vault/create-upload', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				orderId, channelId,
-				fileName: selectedFile!.name,
-				fileSize: selectedFile!.size,
-				fileHash, encrypted: true,
-				plan: selectedPlan
-			})
-		});
-		const data = await resp.json();
-		if (!data.success) throw new Error(data.error || 'Failed to recreate upload session');
-		fileKey = data.data.fileKey;
-		partsTotal = data.data.partsTotal;
-		partsDone = 0;
-		saveUploadState();
-	}
+
 
 	async function uploadSinglePart(partNumber: number): Promise<void> {
 		if (!selectedFile) throw new Error('No file');

@@ -158,6 +158,7 @@
 		"cliInstallHint": "安装 Deno: curl -fsSL https://deno.land/install.sh | sh",
 		"browserDownload": "浏览器下载",
 		"browserDesc": "直接在浏览器中下载。大文件可能不稳定。",
+		"alphaNotice": "此功能处于 Alpha 测试阶段，上传或下载可能失败，请保留重要文件的本地副本。",
 		"newDownload": "全新下载",
 		"vaultBrief": "7/30 天存储 · 端到端加密"
 	},

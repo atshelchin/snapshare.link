@@ -158,6 +158,7 @@
 		"cliInstallHint": "Install Deno: curl -fsSL https://deno.land/install.sh | sh",
 		"browserDownload": "Browser",
 		"browserDesc": "Download directly in browser. Large files may be unreliable.",
+		"alphaNotice": "This feature is in Alpha. Uploads and downloads may fail — please keep a local copy of important files.",
 		"newDownload": "New download",
 		"vaultBrief": "7/30 days · E2E encrypted"
 	},

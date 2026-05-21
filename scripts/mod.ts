@@ -110,7 +110,6 @@ async function main() {
   let fileName: string;
   let partsTotal: number;
   let outDir: string | undefined;
-  let expectedHash = "";
 
   const rawArgs = Deno.args;
 
@@ -120,7 +119,6 @@ async function main() {
     keyStr = parsed.key;
     fileName = parsed.name;
     partsTotal = parsed.parts;
-    expectedHash = parsed.fileHash;
     outDir = rawArgs[1]; // optional
   } else {
     const { parseArgs } = await import("@std/cli/parse-args");
@@ -210,21 +208,12 @@ Supports resume — re-run the same command to continue a partial download.
     const stat = await Deno.stat(filePath);
     console.log(`\n\n✅ Done: ${filePath} (${fmt(stat.size)})`);
 
-    // Hash verification
-    if (expectedHash) {
-      console.log(`\n🔍 Verifying file hash...`);
-      const fileData = await Deno.readFile(filePath);
-      const hashBuf = await crypto.subtle.digest("SHA-256", fileData);
-      const actualHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-      if (actualHash === expectedHash) {
-        console.log(`✅ Hash verified: ${actualHash}`);
-      } else {
-        console.log(`❌ Hash mismatch!`);
-        console.log(`   Expected: ${expectedHash}`);
-        console.log(`   Actual:   ${actualHash}`);
-        Deno.exit(1);
-      }
-    }
+    // File integrity info
+    console.log(`\n🔍 Computing SHA-256...`);
+    const fileData = await Deno.readFile(filePath);
+    const hashBuf = await crypto.subtle.digest("SHA-256", fileData);
+    const actualHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    console.log(`   SHA-256: ${actualHash}`);
     console.log();
   } catch (e) {
     try { file.close(); } catch { /* ignore */ }

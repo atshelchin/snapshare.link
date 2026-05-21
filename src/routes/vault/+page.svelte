@@ -261,8 +261,12 @@
 		showCliModal = true;
 	}
 
+	let cliCopied = $state(false);
+
 	async function copyCliToClipboard() {
 		await navigator.clipboard.writeText(cliCommand);
+		cliCopied = true;
+		setTimeout(() => cliCopied = false, 2000);
 	}
 
 	let resumeOrderId = $state('');
@@ -288,7 +292,7 @@
 	<div class="vault-page">
 		<div class="vault-header">
 			<div class="vault-header-left">
-				<h1 class="vault-title">📦 {i18n.t('vault.title')}{#if userName} · {userName}{/if}</h1>
+				<h1 class="vault-title">📦 {i18n.t('vault.title')}{#if userName} · {userName}{/if} <span class="alpha-badge">Alpha</span></h1>
 			</div>
 			<div class="vault-header-actions">
 				<button class="btn btn-secondary btn-small" onclick={logout}>
@@ -306,6 +310,10 @@
 				<path d="M7 11V7a5 5 0 0 1 10 0v4" />
 			</svg>
 			<span>{i18n.t('privacy.encrypted')}</span>
+		</div>
+
+		<div class="vault-alpha-notice">
+			{i18n.t('vault.alphaNotice')}
 		</div>
 
 		<div class="vault-content">
@@ -403,7 +411,7 @@
 						<code class="cli-command">{cliCommand}</code>
 					</div>
 					<button class="button button-primary" onclick={copyCliToClipboard}>
-						{i18n.t('vault.copyCommand')}
+						{cliCopied ? '✅ Copied!' : i18n.t('vault.copyCommand')}
 					</button>
 					<p class="cli-install-hint">{i18n.t('vault.cliInstallHint')}</p>
 				</div>
@@ -779,6 +787,20 @@
 		background: linear-gradient(90deg, var(--color-primary), hsla(var(--brand-hue), var(--brand-saturation), 60%, 1));
 		transition: width 0.3s ease;
 		border-radius: var(--radius-full);
+	}
+
+	.alpha-badge {
+		font-size: var(--text-xs); font-weight: var(--font-semibold);
+		color: white; background: hsla(30, 90%, 50%, 0.9);
+		padding: 1px 6px; border-radius: var(--radius-full);
+		vertical-align: middle;
+	}
+	.vault-alpha-notice {
+		font-size: var(--text-xs); color: var(--color-muted-foreground);
+		padding: var(--space-2) var(--space-4);
+		margin-bottom: var(--space-2);
+		text-align: center;
+		line-height: 1.5;
 	}
 
 	/* CLI Download Modal */
