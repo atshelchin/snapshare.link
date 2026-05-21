@@ -183,25 +183,30 @@ Supports resume — re-run the same command to continue a partial download.
 
   const t0 = Date.now();
   let totalBytes = 0;
+  let currentPart = startChunk;
+
+  // Refresh display every second
+  const ticker = setInterval(() => {
+    const elapsed = (Date.now() - t0) / 1000;
+    const done = currentPart - startChunk;
+    const speed = elapsed > 0 ? totalBytes / elapsed : 0;
+    const remaining = done > 0 ? ((partsTotal - currentPart + 1) / done) * elapsed : 0;
+    const pct = Math.round(((currentPart - 1) / partsTotal) * 100);
+    const bar = "█".repeat(Math.floor(pct / 2.5)) + "░".repeat(40 - Math.floor(pct / 2.5));
+    Deno.stdout.writeSync(
+      new TextEncoder().encode(`\r  ${bar} ${pct}% (${currentPart - 1}/${partsTotal}) ${fmt(speed)}/s ${fmtTime(elapsed)} / ~${fmtTime(remaining)} left  `)
+    );
+  }, 1000);
 
   try {
     for (let i = startChunk; i <= partsTotal; i++) {
+      currentPart = i;
       const enc = await downloadChunk(`${cdnUrl}/${i}`);
       const dec = await decryptChunk(key, enc);
       await file.write(new Uint8Array(dec));
-
       totalBytes += dec.byteLength;
-      const elapsed = (Date.now() - t0) / 1000;
-      const done = i - startChunk + 1;
-      const remaining = ((partsTotal - i) / done) * elapsed;
-      const pct = Math.round((i / partsTotal) * 100);
-      const speed = elapsed > 0 ? totalBytes / elapsed : 0;
-      const bar = "█".repeat(Math.floor(pct / 2.5)) + "░".repeat(40 - Math.floor(pct / 2.5));
-
-      Deno.stdout.writeSync(
-        new TextEncoder().encode(`\r  ${bar} ${pct}% (${i}/${partsTotal}) ${fmt(speed)}/s ${fmtTime(elapsed)} / ~${fmtTime(remaining)} left`)
-      );
     }
+    clearInterval(ticker);
 
     file.close();
 
@@ -232,6 +237,7 @@ Supports resume — re-run the same command to continue a partial download.
     console.log(`   Merkle root: ${merkleRoot}`);
     console.log();
   } catch (e) {
+    clearInterval(ticker);
     try { file.close(); } catch { /* ignore */ }
     console.error(`\n\n❌ Failed: ${e instanceof Error ? e.message : e}`);
     console.log(`   Re-run the same command to resume.\n`);
