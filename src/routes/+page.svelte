@@ -14,21 +14,21 @@
 	let channel_id = $state('');
 	let privacyError = $state('');
 	let privacyLoading = $state(false);
+	let encrypted = $state(false);
 
 	// 注册流程状态
 	let showRegister = $state(false);
 	let registerName = $state('');
 
-	const handleEnter = () => {
-		const url = resolve(`/channel/${channel_id}`);
-		if (channel_id != '') {
-			goto(url);
-		}
-	};
-
-	const handlePrivateChannel = async () => {
+	const handleEnter = async () => {
 		if (!channel_id.trim()) return;
 
+		if (!encrypted) {
+			goto(resolve(`/channel/${channel_id}`));
+			return;
+		}
+
+		// Encrypted flow
 		if (!isWebAuthnSupported()) {
 			privacyError = i18n.t('privacy.webauthnNotSupported');
 			return;
@@ -38,7 +38,6 @@
 		privacyError = '';
 
 		try {
-			// Try to authenticate with existing passkey + PRF
 			const { key, credentialId } = await authenticateAndDeriveKey(channel_id);
 			const keyStr = await exportKeyToBase64Url(key);
 			const name = await getPasskeyDisplayName(credentialId);
@@ -49,7 +48,6 @@
 			if (error.message === 'PRF_NOT_SUPPORTED') {
 				privacyError = i18n.t('privacy.prfNotSupported');
 			} else {
-				// No passkey — show registration form
 				showRegister = true;
 			}
 		} finally {
@@ -66,7 +64,6 @@
 		try {
 			await registerPasskey(registerName.trim());
 			showRegister = false;
-			// After registration, authenticate with PRF to derive key
 			const { key } = await authenticateAndDeriveKey(channel_id);
 			const keyStr = await exportKeyToBase64Url(key);
 			const byParam = `&by=${encodeURIComponent(registerName.trim())}`;
@@ -84,40 +81,52 @@
 			privacyLoading = false;
 		}
 	};
+
+	const handleKeydown = (e: KeyboardEvent) => {
+		if (e.key === 'Enter') handleEnter();
+	};
 </script>
 
 <div class="container">
-	<div class="room-input-group">
+	<div class="input-row">
 		<input
 			bind:value={channel_id}
+			onkeydown={handleKeydown}
 			type="text"
-			id="roomInput"
 			placeholder={i18n.t('app.inputtips')}
 			autocomplete="off"
 		/>
-	</div>
-	<div class="button-group">
-		<button class="button-primary button" onclick={handleEnter}>{i18n.t('app.enter')}</button>
 		<button
-			class="button-privacy button"
-			onclick={handlePrivateChannel}
-			disabled={privacyLoading}
+			class="lock-toggle"
+			class:active={encrypted}
+			onclick={() => (encrypted = !encrypted)}
+			title={encrypted ? i18n.t('privacy.encrypted') : i18n.t('app.privateChannel')}
 		>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-				<path d="M7 11V7a5 5 0 0 1 10 0v4" />
-			</svg>
-			<span>{privacyLoading ? i18n.t('privacy.authenticating') : i18n.t('app.privateChannel')}</span>
+			{#if encrypted}
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+					<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+				</svg>
+			{:else}
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+					<path d="M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5" />
+				</svg>
+			{/if}
 		</button>
 	</div>
 
-	<div class="vault-entry">
-		<a href="/vault" class="button-vault button">
-			<span>📦</span>
-			<span>{i18n.t('vault.title')}</span>
-			<span class="vault-entry-sub">{i18n.t('vault.subtitle')}</span>
-		</a>
-	</div>
+	{#if encrypted}
+		<div class="encrypt-hint">{i18n.t('privacy.encrypted')}</div>
+	{/if}
+
+	<button class="button button-primary enter-btn" onclick={handleEnter} disabled={privacyLoading || !channel_id.trim()}>
+		{#if privacyLoading}
+			{i18n.t('privacy.authenticating')}
+		{:else}
+			{i18n.t('app.enter')}
+		{/if}
+	</button>
 
 	{#if showRegister}
 		<div class="register-card">
@@ -148,61 +157,85 @@
 		<div class="privacy-error">{privacyError}</div>
 	{/if}
 
-	<p class="tips" style="color: #666; font-size: 14px;">
-		{i18n.t('app.tips')}
-	</p>
+	<p class="tips">{i18n.t('app.tips')}</p>
+
+	<a href="/vault" class="vault-link">
+		📦 {i18n.t('vault.title')} · {i18n.t('vault.vaultBrief')} →
+	</a>
 </div>
 
 <style>
 	.container {
 		text-align: center;
 	}
-	.room-input-group {
-		margin: 30px 0;
-	}
-	.room-input-group input {
-		width: 100%;
-		padding: 15px 20px;
-		font-size: 18px;
+
+	.input-row {
+		margin: 30px 0 var(--space-4);
+		display: flex;
+		align-items: center;
+		gap: 0;
 		border: 2px solid var(--border-color);
 		border-radius: 10px;
-		text-align: center;
-		transition: border 0.3s;
 		background-color: var(--color-panel-1);
-		color: var(--text-primary);
+		transition: border 0.3s;
 	}
-	.room-input-group input:focus {
-		outline: none;
+
+	.input-row:focus-within {
 		border-color: var(--brand-400);
 	}
 
-	.button-group {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
+	.input-row input {
+		flex: 1;
+		padding: 15px 20px;
+		font-size: 18px;
+		border: none;
+		border-radius: 10px 0 0 10px;
+		text-align: center;
+		background: transparent;
+		color: var(--text-primary);
+		outline: none;
 	}
 
-	.button-privacy {
-		display: inline-flex;
+	.lock-toggle {
+		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: var(--space-2);
+		width: 48px;
+		height: 48px;
+		margin-right: 4px;
+		border: none;
+		border-radius: 8px;
 		background: transparent;
-		color: var(--brand-600);
-		border: 2px solid var(--brand-400);
+		color: var(--color-muted-foreground);
+		cursor: pointer;
 		transition: all 0.2s ease;
-		font-weight: 600;
+		flex-shrink: 0;
+		opacity: 0.4;
 	}
 
-	.button-privacy:hover:not(:disabled) {
-		background: var(--brand-600);
-		border-color: var(--brand-600);
-		color: white;
+	.lock-toggle:hover {
+		opacity: 0.7;
 	}
 
-	.button-privacy:disabled {
-		opacity: 0.6;
-		cursor: wait;
+	.lock-toggle.active {
+		color: var(--brand-600);
+		opacity: 1;
+	}
+
+	.encrypt-hint {
+		font-size: var(--text-xs);
+		color: var(--brand-600);
+		margin-top: calc(-1 * var(--space-2));
+		margin-bottom: var(--space-3);
+	}
+
+	.enter-btn {
+		width: 100%;
+	}
+
+	.enter-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.register-card {
@@ -258,45 +291,27 @@
 		font-size: var(--text-sm);
 	}
 
-	/* Vault entry */
-	.vault-entry {
-		margin-top: var(--space-6);
-		padding-top: var(--space-6);
-		border-top: 1px solid var(--color-border);
-	}
-
-	.button-vault {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: var(--space-1);
-		width: 100%;
-		padding: var(--space-4);
-		background: var(--color-panel-1);
-		border: 2px solid var(--color-border);
-		border-radius: 10px;
-		color: var(--color-foreground);
-		text-decoration: none;
-		transition: all 0.2s ease;
-		font-weight: 600;
-	}
-
-	.button-vault:hover {
-		border-color: var(--brand-400);
-		background: var(--color-panel-2);
-	}
-
-	.vault-entry-sub {
-		font-size: var(--text-xs);
-		font-weight: var(--font-normal);
-		color: var(--color-muted-foreground);
-	}
-
 	.tips {
-		margin-top: 40px;
+		margin-top: 30px;
+		color: #666;
+		font-size: 14px;
 	}
+
+	.vault-link {
+		display: inline-block;
+		margin-top: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-muted-foreground);
+		text-decoration: none;
+		transition: color 0.2s;
+	}
+
+	.vault-link:hover {
+		color: var(--brand-600);
+	}
+
 	@media (max-width: 768px) {
-		.room-input-group {
+		.input-row {
 			margin-top: 100px;
 		}
 	}

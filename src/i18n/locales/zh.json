@@ -9,7 +9,7 @@
 	"welcome": "你好",
 	"connect": "连接",
 	"app": {
-		"description": "快速分享文件、文本、链接 - 无需登录",
+		"description": "快速分享文件、文本、链接",
 		"tips": "💡 提示：使用相同频道号的人可以看到相同内容",
 		"enter": "进入频道",
 		"privateChannel": "隐私频道",
@@ -137,7 +137,13 @@
 		"verifyAndUpload": "验证并开始上传",
 		"verifying": "验证中...",
 		"invalidTxHash": "无效的交易哈希",
-		"computingHash": "正在计算文件哈希..."
+		"computingHash": "正在计算文件哈希...",
+		"myFiles": "我的文件",
+		"refresh": "刷新",
+		"expiresIn": "剩余",
+		"expired": "已过期",
+		"downloading": "下载并解密中...",
+		"vaultBrief": "7/30 天存储 · 端到端加密"
 	},
 	"privacy": {
 		"badge": "隐私频道",

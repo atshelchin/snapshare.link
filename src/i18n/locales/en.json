@@ -9,7 +9,7 @@
 	"welcome": "Welcome",
 	"connect": "Connect",
 	"app": {
-		"description": "Quick File Sharing - No Login Required",
+		"description": "Quick File Sharing",
 		"tips": "💡 Tip: People with the same channel ID can see the same content",
 		"enter": "Join Channel",
 		"privateChannel": "Privacy Channel",
@@ -137,7 +137,13 @@
 		"verifyAndUpload": "Verify & Start Upload",
 		"verifying": "Verifying...",
 		"invalidTxHash": "Invalid transaction hash",
-		"computingHash": "Computing file hash..."
+		"computingHash": "Computing file hash...",
+		"myFiles": "My Files",
+		"refresh": "Refresh",
+		"expiresIn": "Expires in",
+		"expired": "Expired",
+		"downloading": "Downloading & decrypting...",
+		"vaultBrief": "7/30 days · E2E encrypted"
 	},
 	"privacy": {
 		"badge": "Privacy Channel",
