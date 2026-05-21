@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { useI18n } from '@shelchin/i18n/svelte';
 	import VaultUploader from '../../components/vault-uploader.svelte';
+	import QRCode from '../../components/qr-code.svelte';
+	import CopyButton from '../../components/copy-button.svelte';
 	import { downloadAndDecryptWithToken, isFileSystemAccessSupported, type DownloadProgress } from '$lib/vault-download';
 	import { decryptString } from '$lib/crypto';
 	import {
@@ -448,7 +450,7 @@
 										onclick={() => handleDownload(file)}
 										disabled={!!downloadingFile}
 									>
-										{i18n.t('channel.fileItem.download')} · ${file.downloadPrice}
+										{i18n.t('channel.fileItem.download')} · {file.downloadPrice} USDC
 									</button>
 								{/if}
 							</div>
@@ -459,6 +461,59 @@
 
 		</div>
 	</div>
+
+	{#if downloadPayingFile && downloadPaymentAddress}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="cli-overlay" onclick={cancelDownloadPayment} onkeydown={(e) => e.key === 'Escape' && cancelDownloadPayment()}>
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="cli-modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+				<h3 class="cli-modal-title">{i18n.t('vault.payToDownload')}</h3>
+				<p class="download-option-desc">
+					{downloadPayingFile.originalName || downloadPayingFile.fileHash.slice(0, 16)} · {formatSize(downloadPayingFile.fileSize)}
+				</p>
+
+				<div class="payment-qr-wrap">
+					<QRCode data={downloadPaymentAddress} size={160} />
+				</div>
+
+				<div class="payment-details">
+					<div class="payment-row">
+						<span>{i18n.t('vault.network')}</span>
+						<span class="payment-value payment-chain">
+							<svg width="14" height="14" viewBox="0 0 111 111" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<circle cx="55.5" cy="55.5" r="55.5" fill="white"/>
+								<path d="M55.3909 93.2691C76.1977 93.2691 93.0591 76.4077 93.0591 55.6009C93.0591 34.7941 76.1977 17.9327 55.3909 17.9327C35.6631 17.9327 19.4756 33.1256 17.8027 52.4173H65.1877V58.7845H17.8027C19.4756 78.0762 35.6631 93.2691 55.3909 93.2691Z" fill="#0052FF"/>
+							</svg>
+							Base
+						</span>
+					</div>
+					<div class="payment-row">
+						<span>{i18n.t('vault.amount')}</span>
+						<span class="payment-value" style="color: var(--color-primary); font-weight: 600;">{downloadPaymentAmount} USDC</span>
+					</div>
+					<div class="payment-row">
+						<span>{i18n.t('vault.receiver')}</span>
+						<span class="payment-value payment-address">{downloadPaymentAddress}</span>
+					</div>
+				</div>
+
+				<CopyButton value={downloadPaymentAddress} label={i18n.t('vault.copyAddress')} />
+
+				<div class="payment-polling">
+					<div class="spinner"></div>
+					<span>{i18n.t('vault.waitingPayment')}</span>
+				</div>
+
+				{#if downloadError}
+					<div class="vault-error">{downloadError}</div>
+				{/if}
+
+				<button class="cli-close" onclick={cancelDownloadPayment}>
+					{i18n.t('vault.cancel')}
+				</button>
+			</div>
+		</div>
+	{/if}
 
 	{#if showCliModal}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -866,6 +921,18 @@
 		text-align: center;
 		line-height: 1.5;
 	}
+
+	/* Download payment modal */
+	.payment-qr-wrap { display: flex; justify-content: center; padding: var(--space-2); background: white; border-radius: var(--radius-lg); }
+	.payment-details { width: 100%; padding: var(--space-3); background: var(--color-panel-2); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--space-2); }
+	.payment-row { display: flex; justify-content: space-between; font-size: var(--text-sm); color: var(--color-muted-foreground); }
+	.payment-value { font-weight: var(--font-medium); color: var(--color-foreground); }
+	.payment-chain { display: inline-flex; align-items: center; gap: 4px; background: #0052ff; color: white; padding: 2px 8px; border-radius: var(--radius-full); font-size: var(--text-xs); }
+	.payment-address { font-family: var(--font-family-mono, monospace); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+	.payment-polling { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-muted-foreground); }
+	.spinner { width: 18px; height: 18px; border: 2px solid var(--color-border); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 1s linear infinite; flex-shrink: 0; }
+	@keyframes spin { to { transform: rotate(360deg); } }
+	.vault-error { padding: var(--space-3); background: hsla(0, 70%, 50%, 0.1); border: 1px solid var(--color-danger); border-radius: var(--radius-md); color: var(--color-danger); font-size: var(--text-sm); }
 
 	/* CLI Download Modal */
 	.cli-overlay {
