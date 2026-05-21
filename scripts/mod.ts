@@ -213,28 +213,39 @@ Supports resume — re-run the same command to continue a partial download.
     const stat = await Deno.stat(filePath);
     console.log(`\n\n✅ Done: ${filePath} (${fmt(stat.size)})`);
 
-    // Merkle root verification — stream 100MB chunks, constant memory
-    console.log(`\n🔍 Computing Merkle root hash...`);
+    // Merkle root verification — infer part size from file size + parts count
+    console.log(`\n🔍 Verifying Merkle root...`);
+    let hashPartSize = PART_SIZE;
+    if (Math.ceil(stat.size / PART_SIZE) !== partsTotal) {
+      // Old file with different part size — binary search
+      let lo = 1024 * 1024, hi = stat.size;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (Math.ceil(stat.size / mid) > partsTotal) lo = mid + 1;
+        else hi = mid;
+      }
+      hashPartSize = lo;
+    }
+
     const verifyFile = await Deno.open(filePath, { read: true });
     const chunkHashes: Uint8Array[] = [];
-    const readBuf = new Uint8Array(PART_SIZE);
+    const readBuf2 = new Uint8Array(hashPartSize);
     while (true) {
-      let offset = 0;
-      while (offset < PART_SIZE) {
-        const n = await verifyFile.read(readBuf.subarray(offset));
+      let off = 0;
+      while (off < hashPartSize) {
+        const n = await verifyFile.read(readBuf2.subarray(off));
         if (n === null) break;
-        offset += n;
+        off += n;
       }
-      if (offset === 0) break;
-      const chunk = readBuf.subarray(0, offset);
-      chunkHashes.push(new Uint8Array(await crypto.subtle.digest("SHA-256", chunk)));
+      if (off === 0) break;
+      chunkHashes.push(new Uint8Array(await crypto.subtle.digest("SHA-256", readBuf2.subarray(0, off))));
     }
     verifyFile.close();
     const combined = new Uint8Array(chunkHashes.length * 32);
     chunkHashes.forEach((h, i) => combined.set(h, i * 32));
     const rootBuf = new Uint8Array(await crypto.subtle.digest("SHA-256", combined));
     const merkleRoot = Array.from(rootBuf).map(b => b.toString(16).padStart(2, "0")).join("");
-    console.log(`   Merkle root: ${merkleRoot}`);
+    console.log(`   Merkle root: ${merkleRoot} (${chunkHashes.length} chunks × ${fmt(hashPartSize)})`);
     console.log();
   } catch (e) {
     clearInterval(ticker);
