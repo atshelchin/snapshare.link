@@ -209,10 +209,19 @@
 		const ctrl = new AbortController();
 		downloadAbort = ctrl;
 
+		// Check if already downloaded before
+		const downloadedKey = `vault-downloaded:${file.fileKey}`;
+		if (localStorage.getItem(downloadedKey)) {
+			if (!confirm(i18n.t('vault.alreadyDownloaded'))) {
+				downloadingFile = null;
+				downloadAbort = null;
+				return;
+			}
+		}
+
 		const cdnHost = file.plan === '7d' ? 'paid-cdn-7days.snapshare.link' : 'paid-cdn.snapshare.link';
 		const cdnUrl = `https://${cdnHost}/${file.fileKey}`;
-		// Use hash as filename fallback (original name is encrypted in the file)
-		const fileName = file.fileHash.slice(0, 12) + '.bin';
+		const fileName = file.originalName || file.fileHash.slice(0, 12) + '.bin';
 
 		try {
 			await downloadAndDecrypt(
@@ -221,8 +230,10 @@
 				encryptionKey,
 				(progress) => { downloadProgress = { ...progress }; },
 				ctrl.signal,
-				file.partsTotal
+				file.partsTotal,
+				file.fileKey
 			);
+			localStorage.setItem(downloadedKey, new Date().toISOString());
 		} catch {
 			// error already reported via progress callback
 		} finally {
