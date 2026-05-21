@@ -1,0 +1,55 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/cli@*": "1.0.29"
+  },
+  "jsr": {
+    "@std/cli@1.0.29": {
+      "integrity": "fa4ef29130baa834d8a13b7d138240c3a2fcfba740bfb7afa646a360a15ec84f"
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@aws-sdk/client-s3@^3.914.0",
+        "npm:@aws-sdk/s3-request-presigner@^3.914.0",
+        "npm:@cloudflare/workers-types@^4.20260521.1",
+        "npm:@eslint/compat@^1.4.0",
+        "npm:@eslint/js@^9.36.0",
+        "npm:@libsql/client@~0.15.15",
+        "npm:@lucide/svelte@0.546",
+        "npm:@noble/curves@^2.2.0",
+        "npm:@noble/hashes@^2.2.0",
+        "npm:@playwright/test@^1.55.1",
+        "npm:@shelchin/i18n@0.0.3-dev.20251016115159.4e313f3",
+        "npm:@sveltejs/adapter-cloudflare@^7.2.3",
+        "npm:@sveltejs/kit@^2.43.2",
+        "npm:@sveltejs/vite-plugin-svelte@^6.2.0",
+        "npm:@types/node@20",
+        "npm:@vitest/browser@^3.2.4",
+        "npm:aws4fetch@^1.0.20",
+        "npm:drizzle-kit@~0.31.4",
+        "npm:drizzle-orm@~0.44.5",
+        "npm:eslint-config-prettier@^10.1.8",
+        "npm:eslint-plugin-svelte@^3.12.4",
+        "npm:eslint@^9.36.0",
+        "npm:globals@^16.4.0",
+        "npm:mdsvex@~0.12.6",
+        "npm:nanoid@^5.1.6",
+        "npm:playwright@^1.55.1",
+        "npm:prettier-plugin-svelte@^3.4.0",
+        "npm:prettier@^3.6.2",
+        "npm:qr-code-styling@^1.9.2",
+        "npm:svelte-check@^4.3.2",
+        "npm:svelte@^5.39.5",
+        "npm:typescript-eslint@^8.44.1",
+        "npm:typescript@^5.9.2",
+        "npm:vite-plugin-devtools-json@1",
+        "npm:vite@^7.1.7",
+        "npm:vitest-browser-svelte@^1.1.0",
+        "npm:vitest@^3.2.4",
+        "npm:wrangler@^4.93.0"
+      ]
+    }
+  }
+}
