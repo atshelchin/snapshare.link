@@ -10,10 +10,27 @@
 
 	type StoragePlan = '7d' | '30d';
 
-	let { channelId, encryptionKey } = $props<{
+	let { channelId, encryptionKey, resumeOrderId = '', resumeFileName = '', resumeFileHash = '' } = $props<{
 		channelId: string;
 		encryptionKey: CryptoKey;
+		resumeOrderId?: string;
+		resumeFileName?: string;
+		resumeFileHash?: string;
 	}>();
+
+	// When resumeOrderId changes, enter resume mode — user needs to re-select the file
+	let lastResumeOrderId = '';
+	$effect(() => {
+		if (resumeOrderId && resumeOrderId !== lastResumeOrderId) {
+			lastResumeOrderId = resumeOrderId;
+			selectedFile = null;
+			orderId = resumeOrderId;
+			uploadState = 'failed';
+			error = resumeFileName
+				? i18n.t('vault.selectFileToResume') + '\n📄 ' + resumeFileName
+				: i18n.t('vault.selectFileToResume');
+		}
+	});
 
 	// State
 	let selectedPlan = $state<StoragePlan>('7d');
@@ -109,6 +126,18 @@
 			fileHash = `${file.name}-${file.size}-${file.lastModified}`;
 		}
 		isHashing = false;
+
+		// If resuming a paid order, verify file matches then upload
+		if (orderId) {
+			if (resumeFileHash && fileHash !== resumeFileHash) {
+				error = i18n.t('vault.fileMismatch') + '\n📄 ' + (resumeFileName || '');
+				uploadState = 'failed';
+				selectedFile = null;
+				return;
+			}
+			await startUpload();
+			return;
+		}
 		await refreshPricing(file);
 	}
 
@@ -210,7 +239,7 @@
 	}
 
 	async function startUpload() {
-		if (!selectedFile || !pricing) return;
+		if (!selectedFile) return;
 		uploadState = 'uploading';
 		error = '';
 
@@ -371,6 +400,7 @@
 		isPaused = false;
 		orderId = '';
 		paymentAddress = '';
+		lastResumeOrderId = '';
 	}
 
 	function saveUploadState() {
@@ -467,12 +497,15 @@
 
 	{:else if uploadState === 'failed'}
 		<div class="vault-failed">
-			<div class="vault-error">{error}</div>
+			<div class="vault-error" style="white-space: pre-line;">{error}</div>
 			<div class="progress-actions">
 				{#if fileKey && uploadId}
 					<button class="button button-primary" onclick={retryUpload}>{i18n.t('vault.retry')}</button>
 				{:else if orderId}
-					<button class="button button-primary" onclick={startUpload}>{i18n.t('vault.retry')}</button>
+					<label class="button button-primary" style="cursor: pointer;">
+						📁 {i18n.t('vault.selectFile')}
+						<input type="file" hidden onchange={handleFileSelect} />
+					</label>
 				{/if}
 				<button class="button button-secondary" onclick={resetState}>{i18n.t('vault.cancel')}</button>
 			</div>

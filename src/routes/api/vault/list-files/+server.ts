@@ -21,9 +21,12 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			.limit(50)
 			.all();
 
-		// Return non-expired files (completed + paid-but-pending for retry)
+		// Return non-expired files: completed ones + paid-but-pending (have payment_tx) for retry
 		const activeFiles = files.filter(
-			(f) => f.expires_at > now && (f.upload_status === 'completed' || f.upload_status === 'pending' || f.upload_status === 'uploading')
+			(f) => f.expires_at > now && (
+				f.upload_status === 'completed' ||
+				((f.upload_status === 'pending' || f.upload_status === 'uploading') && f.payment_tx)
+			)
 		);
 
 		return Response.json({

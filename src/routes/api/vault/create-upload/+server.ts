@@ -54,13 +54,25 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			});
 		}
 
-		// Get order from KV
+		// Get order from KV first, fallback to D1
+		let order: { channelId: string; fileHash: string; paymentAddress: string; amount: string };
 		const orderData = await env.KV.get(`vault-order:${orderId}`);
-		if (!orderData) {
-			return Response.json({ success: false, error: 'Order not found or expired' }, { status: 404 });
+		if (orderData) {
+			order = JSON.parse(orderData);
+		} else {
+			// KV expired, recover from D1
+			const d1Order = await db.select().from(paidFiles)
+				.where(eq(paidFiles.file_key, orderId)).limit(1).all();
+			if (!d1Order.length) {
+				return Response.json({ success: false, error: 'Order not found' }, { status: 404 });
+			}
+			order = {
+				channelId: d1Order[0].channel_id,
+				fileHash: d1Order[0].file_name,
+				paymentAddress: d1Order[0].payment_address || '',
+				amount: d1Order[0].payment_amount || '0'
+			};
 		}
-
-		const order = JSON.parse(orderData);
 
 		// Verify order belongs to this channel and file
 		if (order.channelId !== channelId || order.fileHash !== fileHash) {

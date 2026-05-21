@@ -1,12 +1,9 @@
 // Data Vault: paid multipart upload utilities for large files
-// Uses S3-compatible API for R2 multipart uploads with presigned URLs
+// Uses R2 binding for server-side ops, S3 presigned URLs for client uploads
 
 import {
 	S3Client,
-	CreateMultipartUploadCommand,
 	UploadPartCommand,
-	CompleteMultipartUploadCommand,
-	AbortMultipartUploadCommand
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
@@ -27,8 +24,8 @@ export const STORAGE_PLANS = {
 } as const;
 
 export interface VaultEnv extends Env {
-	PAID_BUCKET_30D: string;
-	PAID_BUCKET_7D: string;
+	PAID_BUCKET_30D: R2Bucket;
+	PAID_BUCKET_7D: R2Bucket;
 }
 
 function createS3Client(env: VaultEnv): S3Client {
@@ -40,6 +37,10 @@ function createS3Client(env: VaultEnv): S3Client {
 			secretAccessKey: env.SECRET_ACCESS_KEY
 		}
 	});
+}
+
+function getBucket(env: VaultEnv, plan: StoragePlan): R2Bucket {
+	return plan === '7d' ? env.PAID_BUCKET_7D : env.PAID_BUCKET_30D;
 }
 
 function getBucketName(_env: VaultEnv, plan: StoragePlan): string {
@@ -75,37 +76,27 @@ export function calculateParts(fileSizeBytes: number): number {
 	return Math.ceil(fileSizeBytes / PART_SIZE);
 }
 
-// Create a multipart upload and return uploadId + fileKey
+// Create a multipart upload using R2 binding (no DOMParser needed)
 export async function createMultipartUpload(
 	env: VaultEnv,
 	fileName: string,
 	plan: StoragePlan
 ): Promise<{ uploadId: string; fileKey: string }> {
-	const s3 = createS3Client(env);
 	const uuid = nanoid();
 	const now = new Date();
 	const prefix = now.toISOString().slice(0, 10);
 	const fileKey = `vault/${prefix}/${uuid}`;
-	const bucket = getBucketName(env, plan);
+	const bucket = getBucket(env, plan);
 
-	const command = new CreateMultipartUploadCommand({
-		Bucket: bucket,
-		Key: fileKey,
-		ContentType: 'application/octet-stream',
-		Metadata: {
-			'original-name': encodeURIComponent(fileName)
-		}
+	const upload = await bucket.createMultipartUpload(fileKey, {
+		httpMetadata: { contentType: 'application/octet-stream' },
+		customMetadata: { 'original-name': encodeURIComponent(fileName) }
 	});
 
-	const response = await s3.send(command);
-	if (!response.UploadId) {
-		throw new Error('Failed to create multipart upload');
-	}
-
-	return { uploadId: response.UploadId, fileKey };
+	return { uploadId: upload.uploadId, fileKey };
 }
 
-// Generate a presigned URL for uploading a single part
+// Generate a presigned URL for uploading a single part (S3 SDK, no XML parsing)
 export async function getPartUploadUrl(
 	env: VaultEnv,
 	fileKey: string,
@@ -126,7 +117,7 @@ export async function getPartUploadUrl(
 	return getSignedUrl(s3, command, { expiresIn: 3600 });
 }
 
-// Complete the multipart upload
+// Complete the multipart upload using R2 binding
 export async function completeMultipartUpload(
 	env: VaultEnv,
 	fileKey: string,
@@ -134,39 +125,25 @@ export async function completeMultipartUpload(
 	parts: { partNumber: number; etag: string }[],
 	plan: StoragePlan
 ): Promise<void> {
-	const s3 = createS3Client(env);
-	const bucket = getBucketName(env, plan);
+	const bucket = getBucket(env, plan);
+	const upload = bucket.resumeMultipartUpload(fileKey, uploadId);
 
-	const command = new CompleteMultipartUploadCommand({
-		Bucket: bucket,
-		Key: fileKey,
-		UploadId: uploadId,
-		MultipartUpload: {
-			Parts: parts.map((p) => ({
-				PartNumber: p.partNumber,
-				ETag: p.etag
-			}))
-		}
-	});
-
-	await s3.send(command);
+	await upload.complete(
+		parts.map((p) => ({
+			partNumber: p.partNumber,
+			etag: p.etag
+		}))
+	);
 }
 
-// Abort a multipart upload (cleanup)
+// Abort a multipart upload using R2 binding
 export async function abortMultipartUpload(
 	env: VaultEnv,
 	fileKey: string,
 	uploadId: string,
 	plan: StoragePlan
 ): Promise<void> {
-	const s3 = createS3Client(env);
-	const bucket = getBucketName(env, plan);
-
-	const command = new AbortMultipartUploadCommand({
-		Bucket: bucket,
-		Key: fileKey,
-		UploadId: uploadId
-	});
-
-	await s3.send(command);
+	const bucket = getBucket(env, plan);
+	const upload = bucket.resumeMultipartUpload(fileKey, uploadId);
+	await upload.abort();
 }

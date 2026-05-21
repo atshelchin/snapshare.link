@@ -25,6 +25,7 @@
 		"db:studio": "drizzle-kit studio"
 	},
 	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20260521.1",
 		"@eslint/compat": "^1.4.0",
 		"@eslint/js": "^9.36.0",
 		"@libsql/client": "^0.15.15",
@@ -52,7 +53,7 @@
 		"vite-plugin-devtools-json": "^1.0.0",
 		"vitest": "^3.2.4",
 		"vitest-browser-svelte": "^1.1.0",
-		"wrangler": "^4.43.0"
+		"wrangler": "^4.93.0"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.914.0",

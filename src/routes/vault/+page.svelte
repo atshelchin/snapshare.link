@@ -232,6 +232,19 @@
 		downloadAbort?.abort();
 	}
 
+	let resumeOrderId = $state('');
+	let resumeFileName = $state('');
+	let resumeFileHash = $state('');
+
+	function handleResumeUpload(file: VaultFile) {
+		if (file.orderId) {
+			resumeOrderId = file.orderId;
+			resumeFileName = file.originalName || '';
+			resumeFileHash = file.fileHash || '';
+			document.querySelector('.vault-content')?.scrollIntoView({ behavior: 'smooth' });
+		}
+	}
+
 	function goHome() {
 		goto(resolve('/'));
 	}
@@ -263,7 +276,7 @@
 		</div>
 
 		<div class="vault-content">
-			<VaultUploader channelId={vaultChannelId} {encryptionKey} />
+			<VaultUploader channelId={vaultChannelId} {encryptionKey} {resumeOrderId} {resumeFileName} {resumeFileHash} />
 		</div>
 
 		<!-- File list -->
@@ -306,7 +319,9 @@
 							</div>
 							<div class="vault-file-actions">
 								{#if file.uploadStatus !== 'completed'}
-									<span class="status-badge">{i18n.t('vault.paid')}</span>
+									<button class="btn btn-secondary btn-small" onclick={() => handleResumeUpload(file)}>
+										{i18n.t('vault.retry')}
+									</button>
 								{:else if downloadingFile === file.fileKey && downloadProgress}
 									<div class="download-progress-mini">
 										<span>{Math.round(downloadProgress.percent)}%</span>
@@ -660,8 +675,6 @@
 	}
 
 	.status-pending { color: var(--color-primary); font-weight: var(--font-medium); }
-	.status-badge { font-size: var(--text-xs); font-weight: var(--font-semibold); color: hsl(120, 50%, 40%); background: hsl(120, 50%, 92%); padding: 2px 8px; border-radius: var(--radius-full); }
-
 	.download-progress-mini {
 		display: flex;
 		align-items: center;

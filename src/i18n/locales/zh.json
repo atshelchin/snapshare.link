@@ -145,6 +145,8 @@
 		"downloading": "下载并解密中...",
 		"uploadPending": "待上传",
 		"paid": "已付款",
+		"selectFileToResume": "请重新选择同一文件以恢复上传",
+		"fileMismatch": "文件与原始上传不匹配，请选择正确的文件",
 		"vaultBrief": "7/30 天存储 · 端到端加密"
 	},
 	"privacy": {

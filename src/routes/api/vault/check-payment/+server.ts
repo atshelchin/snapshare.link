@@ -1,10 +1,13 @@
 import type { RequestHandler } from './$types';
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import { paidFiles } from '$lib/server/db/schema';
 import { checkPaymentToAddress } from '$lib/payment';
 
 // Check if payment has been received at the order's unique address
 export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
-		const env = platform?.env as Record<string, unknown>;
+		const env = platform?.env as unknown as Record<string, unknown>;
 		const kv = env.KV as { get: (key: string) => Promise<string | null> };
 		const { orderId } = await request.json();
 
@@ -22,6 +25,14 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		// Check if the unique address has received USDC
 		const result = await checkPaymentToAddress(order.paymentAddress, order.amount);
+
+		// Persist payment_tx to D1 immediately on confirmation
+		if (result.paid && result.txHash) {
+			const db = drizzle(platform?.env!.DB);
+			await db.update(paidFiles)
+				.set({ payment_tx: result.txHash })
+				.where(eq(paidFiles.file_key, orderId));
+		}
 
 		return Response.json({
 			success: true,
