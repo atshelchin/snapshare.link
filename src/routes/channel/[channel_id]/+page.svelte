@@ -29,6 +29,7 @@
 	let uploadQueue = $state<UploadProgress[]>([]);
 	let isUploading = $state(false);
 	let rateLimitError = $state('');
+	let isDragOver = $state(false);
 
 	// 文件列表状态
 	interface FileItem {
@@ -92,16 +93,12 @@
 		};
 	});
 
-	// 处理文件选择
-	function handleFileSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
-		if (!input.files || input.files.length === 0) return;
-
-		const result = validateFiles(input.files);
+	// 处理文件（来自 input 或 drop）
+	function addFiles(files: FileList | File[]) {
+		const result = validateFiles(files);
 		validationError = '';
 		rateLimitError = '';
 
-		// 先添加所有文件到列表（包括有效和无效的）
 		if (result.invalid.length > 0) {
 			selectedFiles = [
 				...selectedFiles,
@@ -122,9 +119,36 @@
 			const toDelete = currentValidFiles.length - 10;
 			validationError = `${i18n.t('channel.upload.maxFiles')} ${currentValidFiles.length} ${i18n.t('channel.upload.filesSelected')}, ${i18n.t('channel.upload.pleaseDelete')} ${toDelete} ${i18n.t('channel.upload.files')}`;
 		}
+	}
 
+	// 处理文件选择
+	function handleFileSelect(event: Event) {
+		const input = event.target as HTMLInputElement;
+		if (!input.files || input.files.length === 0) return;
+		addFiles(input.files);
 		// 清空 input 以允许重复选择同一文件
 		input.value = '';
+	}
+
+	// 拖拽处理
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault();
+		isDragOver = true;
+	}
+
+	function handleDragLeave(event: DragEvent) {
+		event.preventDefault();
+		isDragOver = false;
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		isDragOver = false;
+		if (isUploading) return;
+		const files = event.dataTransfer?.files;
+		if (files && files.length > 0) {
+			addFiles(files);
+		}
 	}
 
 	// 移除文件
@@ -386,7 +410,14 @@
 						{/each}
 					</div>
 				{:else}
-					<div class="upload-area">
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						class="upload-area"
+						class:drag-over={isDragOver}
+						ondragover={handleDragOver}
+						ondragleave={handleDragLeave}
+						ondrop={handleDrop}
+					>
 						<input
 							type="file"
 							multiple
@@ -561,9 +592,15 @@
 		transition: all 0.2s ease;
 	}
 
-	.file-input-label:hover {
+	.file-input-label:hover,
+	.upload-area.drag-over .file-input-label {
 		border-color: var(--color-primary);
 		background: var(--color-panel-2);
+	}
+
+	.upload-area.drag-over .file-input-label {
+		border-style: solid;
+		box-shadow: 0 0 0 3px hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.2);
 	}
 
 	.upload-icon {

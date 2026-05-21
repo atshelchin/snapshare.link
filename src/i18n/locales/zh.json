@@ -85,6 +85,9 @@
 			"loadError": "加载失败",
 			"copyText": "复制文本",
 			"download": "下载",
+			"downloading": "下载中...",
+			"downloadDone": "下载完成",
+			"downloadError": "下载失败",
 			"open": "打开",
 			"audioNotSupported": "您的浏览器不支持音频播放",
 			"videoNotSupported": "您的浏览器不支持视频播放"

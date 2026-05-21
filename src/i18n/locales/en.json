@@ -85,6 +85,9 @@
 			"loadError": "Failed to load",
 			"copyText": "Copy Text",
 			"download": "Download",
+			"downloading": "Downloading...",
+			"downloadDone": "Download complete",
+			"downloadError": "Download failed",
 			"open": "Open",
 			"audioNotSupported": "Your browser does not support audio playback",
 			"videoNotSupported": "Your browser does not support video playback"

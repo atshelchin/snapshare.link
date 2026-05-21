@@ -1,38 +1,46 @@
-# sv
+# SnapShare.link
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A fast, no-login file sharing web app. Share files and text instantly through channels.
 
-## Creating a project
+## Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- **Channel-based sharing** — Join a channel by ID, anyone with the same ID sees the same content
+- **Drag & drop upload** — Drag files directly into the upload area (supports multiple files)
+- **Text sharing** — Share text snippets alongside files
+- **Real-time updates** — SSE-powered live file list updates
+- **Auto-expiry** — All uploaded files are automatically deleted after 1 hour
+- **i18n** — English and Chinese language support
+- **Dark mode** — Light/dark theme toggle
+- **QR code** — Share channels via QR code
+- **No login required**
 
-```sh
-# create a new project in the current directory
-npx sv create
+## Tech Stack
 
-# create a new project in my-app
-npx sv create my-app
-```
+- [SvelteKit](https://svelte.dev/) + Svelte 5
+- [Cloudflare Workers](https://workers.cloudflare.com/) (adapter-cloudflare)
+- [Cloudflare R2](https://www.cloudflare.com/developer-platform/r2/) for file storage (S3-compatible presigned URLs)
+- [Drizzle ORM](https://orm.drizzle.team/) + libSQL
+- [Playwright](https://playwright.dev/) for E2E tests
+- [Vitest](https://vitest.dev/) for unit tests
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
+## Development
 
 ```sh
-npm run build
+pnpm install
+pnpm dev
 ```
 
-You can preview the production build with `npm run preview`.
+## Build & Deploy
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```sh
+pnpm build
+pnpm deploy   # deploys to Cloudflare Workers
+```
+
+## Database
+
+```sh
+pnpm db:generate   # generate migrations
+pnpm db:push       # push schema to DB
+pnpm db:studio     # open Drizzle Studio
+```

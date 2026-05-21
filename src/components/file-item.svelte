@@ -77,6 +77,9 @@
 	let textContent = $state<string>('');
 	let isLoadingText = $state(false);
 
+	// 下载状态: 'idle' | 'downloading' | 'done' | 'error'
+	let downloadStatus = $state<'idle' | 'downloading' | 'done' | 'error'>('idle');
+
 	// 加载文本内容
 	async function loadTextContent() {
 		if (!isText || textContent) return;
@@ -104,6 +107,8 @@
 
 	// 强制下载文件
 	async function handleDownload() {
+		if (downloadStatus === 'downloading') return;
+		downloadStatus = 'downloading';
 		try {
 			const response = await fetch(fileUrl);
 			const blob = await response.blob();
@@ -115,8 +120,16 @@
 			a.click();
 			document.body.removeChild(a);
 			window.URL.revokeObjectURL(url);
+			downloadStatus = 'done';
+			setTimeout(() => {
+				downloadStatus = 'idle';
+			}, 3000);
 		} catch (error) {
 			console.error('Download failed:', error);
+			downloadStatus = 'error';
+			setTimeout(() => {
+				downloadStatus = 'idle';
+			}, 3000);
 		}
 	}
 
@@ -159,17 +172,42 @@
 			<button
 				onclick={handleDownload}
 				class="icon-button"
-				title={i18n.t('channel.fileItem.download')}
+				class:download-done={downloadStatus === 'done'}
+				class:download-error={downloadStatus === 'error'}
+				class:download-loading={downloadStatus === 'downloading'}
+				disabled={downloadStatus === 'downloading'}
+				title={downloadStatus === 'done'
+					? i18n.t('channel.fileItem.downloadDone')
+					: downloadStatus === 'error'
+						? i18n.t('channel.fileItem.downloadError')
+						: downloadStatus === 'downloading'
+							? i18n.t('channel.fileItem.downloading')
+							: i18n.t('channel.fileItem.download')}
 			>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-					<path
-						d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-						stroke-width="2"
-						stroke-linecap="round"
-					/>
-					<polyline points="7 10 12 15 17 10" stroke-width="2" stroke-linecap="round" />
-					<line x1="12" y1="15" x2="12" y2="3" stroke-width="2" stroke-linecap="round" />
-				</svg>
+				{#if downloadStatus === 'downloading'}
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="spin">
+						<path d="M21 12a9 9 0 1 1-6.219-8.56" stroke-width="2" stroke-linecap="round" />
+					</svg>
+				{:else if downloadStatus === 'done'}
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+					</svg>
+				{:else if downloadStatus === 'error'}
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<line x1="18" y1="6" x2="6" y2="18" stroke-width="2" stroke-linecap="round" />
+						<line x1="6" y1="6" x2="18" y2="18" stroke-width="2" stroke-linecap="round" />
+					</svg>
+				{:else}
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path
+							d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+							stroke-width="2"
+							stroke-linecap="round"
+						/>
+						<polyline points="7 10 12 15 17 10" stroke-width="2" stroke-linecap="round" />
+						<line x1="12" y1="15" x2="12" y2="3" stroke-width="2" stroke-linecap="round" />
+					</svg>
+				{/if}
 			</button>
 		</div>
 	</div>
@@ -442,5 +480,32 @@
 
 	.icon-button svg {
 		flex-shrink: 0;
+	}
+
+	.icon-button.download-done {
+		background: var(--color-success, #22c55e);
+		color: white;
+		border-color: var(--color-success, #22c55e);
+	}
+
+	.icon-button.download-error {
+		background: var(--color-danger);
+		color: white;
+		border-color: var(--color-danger);
+	}
+
+	.icon-button.download-loading {
+		opacity: 0.7;
+		cursor: wait;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.spin {
+		animation: spin 1s linear infinite;
 	}
 </style>
