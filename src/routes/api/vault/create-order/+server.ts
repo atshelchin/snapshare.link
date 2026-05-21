@@ -8,7 +8,7 @@ import {
 	STORAGE_PLANS,
 	type StoragePlan
 } from '$lib/vault';
-import { derivePaymentAddress, MAIN_WALLET } from '$lib/payment';
+import { generatePaymentAddress } from '$lib/payment';
 
 // Create a payment order with a unique receiving address
 export const POST: RequestHandler = async ({ request, platform }) => {
@@ -32,10 +32,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const pricing = calculatePrice(fileSize, storagePlan);
 		const partsTotal = calculateParts(fileSize);
 
-		// Generate unique order ID and derive payment address
+		// Generate unique order ID and random payment keypair
 		const orderId = nanoid();
-		const masterSeed = env.PAYMENT_MASTER_SEED || 'dev-seed-change-in-production';
-		const { address: paymentAddress } = derivePaymentAddress(masterSeed, orderId);
+		const { address: paymentAddress, privateKeyHex } = generatePaymentAddress();
 
 		const now = Date.now();
 		const expiresAt = now + planConfig.days * 24 * 60 * 60 * 1000;
@@ -63,6 +62,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			file_key: orderId, // temporary PK, replaced when upload starts
 			order_id: orderId,
 			payment_address: paymentAddress,
+			private_key: privateKeyHex,
 			channel_id: channelId,
 			file_name: fileHash,
 			file_size: fileSize,

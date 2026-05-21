@@ -39,7 +39,6 @@ A fast, no-login file sharing web app. Share files and text instantly through ch
 
 | Variable | Description |
 |----------|-------------|
-| `PAYMENT_MASTER_SEED` | Master seed for deriving per-order USDC payment addresses via HKDF. **Critical: losing this = losing access to all payment funds.** |
 | `ACCESS_KEY_ID` | Cloudflare R2 S3-compatible access key ID |
 | `SECRET_ACCESS_KEY` | Cloudflare R2 S3-compatible secret access key |
 | `ACCOUNT_ID` | Cloudflare account ID (for R2 endpoint) |

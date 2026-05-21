@@ -1,11 +1,9 @@
 // USDC payment on Base network
-// Each order gets a unique receiving address derived from a master seed.
+// Each order gets a random receiving address. Private key stored in D1.
 // User pays to the unique address, server verifies, then sweeps to main wallet.
 
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
-import { hkdf } from '@noble/hashes/hkdf.js';
-import { sha256 } from '@noble/hashes/sha2.js';
 
 const BASE_RPC = 'https://mainnet.base.org';
 
@@ -16,14 +14,9 @@ const USDC_DECIMALS = 6;
 // Main wallet (funds are swept here)
 export const MAIN_WALLET = '0x14fB1fB21751E29F7Ec48dC450017552E3D1eA5c';
 
-// Derive a unique receiving address from master seed + order ID
-export function derivePaymentAddress(
-	masterSeed: string,
-	orderId: string
-): { address: string; privateKeyHex: string } {
-	const seed = new TextEncoder().encode(masterSeed);
-	const info = new TextEncoder().encode('snapshare-vault:' + orderId);
-	const privateKey = hkdf(sha256, seed, new Uint8Array(32), info, 32);
+// Generate a random payment keypair
+export function generatePaymentAddress(): { address: string; privateKeyHex: string } {
+	const privateKey = secp256k1.utils.randomSecretKey();
 	const publicKey = secp256k1.getPublicKey(privateKey, false); // uncompressed 65 bytes
 	const hash = keccak_256(publicKey.slice(1)); // hash of x,y (skip 04 prefix)
 	const addressBytes = hash.slice(-20);
@@ -35,8 +28,8 @@ export function derivePaymentAddress(
 
 	const privateKeyHex =
 		'0x' +
-		Array.from(privateKey)
-			.map((b: number) => b.toString(16).padStart(2, '0'))
+		Array.from(new Uint8Array(privateKey))
+			.map((b) => b.toString(16).padStart(2, '0'))
 			.join('');
 
 	return { address: toChecksumAddress(address), privateKeyHex };
