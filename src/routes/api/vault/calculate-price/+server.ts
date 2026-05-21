@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { calculatePrice, calculateParts, PART_SIZE, STORAGE_PLANS, type StoragePlan } from '$lib/vault';
+import { calculatePrice, calculateParts, PART_SIZE, MAX_FILE_SIZE, STORAGE_PLANS, type StoragePlan } from '$lib/vault';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -7,6 +7,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (!fileSize || fileSize <= 0) {
 			return Response.json({ success: false, error: 'Invalid file size' }, { status: 400 });
+		}
+
+		if (fileSize > MAX_FILE_SIZE) {
+			return Response.json({ success: false, error: 'File size exceeds maximum of 8TB' }, { status: 400 });
 		}
 
 		if (!STORAGE_PLANS[plan as StoragePlan]) {

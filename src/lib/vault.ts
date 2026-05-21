@@ -14,8 +14,8 @@ import type { Env } from '$lib';
 // Fixed 100MB per chunk
 export const PART_SIZE = 100 * 1024 * 1024;
 
-// No hard file size limit — practically limited by storage cost
-export const MAX_FILE_SIZE = Infinity;
+// Max file size: 8TB
+export const MAX_FILE_SIZE = 8 * 1024 * 1024 * 1024 * 1024;
 
 // Storage plans
 export type StoragePlan = '7d' | '30d';
