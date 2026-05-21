@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { nanoid } from 'nanoid';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { paidFiles, downloadTokens } from '$lib/server/db/schema';
 import { generatePaymentAddress } from '$lib/payment';
 
@@ -14,6 +14,26 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		if (!fileKey) {
 			return Response.json({ success: false, error: 'Missing fileKey' }, { status: 400 });
+		}
+
+		// Check if there's already a valid token for this file
+		const now = Date.now();
+		const existingTokens = await db.select().from(downloadTokens)
+			.where(and(
+				eq(downloadTokens.file_key, fileKey),
+				gt(downloadTokens.expires_at, now)
+			)).limit(1).all();
+
+		if (existingTokens.length && existingTokens[0].downloads_used < existingTokens[0].downloads_max) {
+			return Response.json({
+				success: true,
+				data: {
+					alreadyPaid: true,
+					token: existingTokens[0].token,
+					downloadsUsed: existingTokens[0].downloads_used,
+					downloadsMax: existingTokens[0].downloads_max
+				}
+			});
 		}
 
 		// Get file info
@@ -31,8 +51,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		// Generate payment address
 		const orderId = nanoid();
 		const { address: paymentAddress, privateKeyHex } = generatePaymentAddress();
-
-		const now = Date.now();
 
 		// Store in KV (1h TTL for payment polling)
 		await env.KV.put(

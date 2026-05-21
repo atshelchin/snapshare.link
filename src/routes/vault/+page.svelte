@@ -249,15 +249,24 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ fileKey: file.fileKey })
 			});
-			const data = await resp.json() as { success: boolean; data?: { orderId: string; paymentAddress: string; amount: string }; error?: string };
+			const data = await resp.json() as { success: boolean; data?: { orderId?: string; paymentAddress?: string; amount?: string; alreadyPaid?: boolean; token?: string; downloadsUsed?: number; downloadsMax?: number }; error?: string };
 			if (!data.success || !data.data) {
 				downloadError = data.error || 'Failed to create download order';
 				downloadPayingFile = null;
 				return;
 			}
-			downloadOrderId = data.data.orderId;
-			downloadPaymentAddress = data.data.paymentAddress;
-			downloadPaymentAmount = data.data.amount;
+			// Already paid — skip payment, go to download
+			if (data.data.alreadyPaid && data.data.token) {
+				downloadToken = data.data.token;
+				downloadsUsed = data.data.downloadsUsed || 0;
+				downloadsMax = data.data.downloadsMax || 10;
+				cliModalFile = file;
+				await copyDownloadCommand(file);
+				return;
+			}
+			downloadOrderId = data.data.orderId || '';
+			downloadPaymentAddress = data.data.paymentAddress || '';
+			downloadPaymentAmount = data.data.amount || '';
 			// Poll for payment
 			downloadPollingTimer = setInterval(async () => {
 				try {

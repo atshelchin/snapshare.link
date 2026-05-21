@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { nanoid } from 'nanoid';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { downloadTokens } from '$lib/server/db/schema';
 import { checkPaymentToAddress } from '$lib/payment';
 
@@ -45,14 +45,33 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			});
 		}
 
-		// Payment confirmed — activate token (replace pending with real token)
+		// Check if already activated (prevent duplicates from repeated polling)
+		const existing = await db.select().from(downloadTokens)
+			.where(and(
+				eq(downloadTokens.file_key, order.fileKey),
+				gt(downloadTokens.expires_at, Date.now())
+			)).limit(1).all();
+
+		if (existing.length && existing[0].downloads_max > 0 && existing[0].token !== orderId) {
+			// Already activated by a previous poll
+			return Response.json({
+				success: true,
+				data: {
+					paid: true,
+					token: existing[0].token,
+					expiresAt: existing[0].expires_at,
+					downloadsMax: existing[0].downloads_max,
+					fileKey: order.fileKey
+				}
+			});
+		}
+
+		// Activate token
 		const token = nanoid(32);
 		const now = Date.now();
 
-		// Delete the pending token record
 		await db.delete(downloadTokens).where(eq(downloadTokens.token, orderId));
 
-		// Insert activated token
 		await db.insert(downloadTokens).values({
 			token,
 			file_key: order.fileKey,
