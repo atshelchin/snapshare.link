@@ -1,6 +1,6 @@
 // Streaming decrypt-to-disk download for vault files
 // Each chunk is a separate R2 object: {fileKey}/{partNumber}
-// Resume: user selects the same file, we detect existing size and skip completed chunks.
+// Resume: user selects the partial file via Open dialog, we detect size and continue.
 
 import { decryptFile } from '$lib/crypto';
 import { PART_SIZE } from '$lib/vault';
@@ -19,13 +19,33 @@ export function isFileSystemAccessSupported(): boolean {
 	return typeof window !== 'undefined' && 'showSaveFilePicker' in window;
 }
 
+type ShowSaveFilePicker = (opts: unknown) => Promise<FileSystemFileHandle>;
+type ShowOpenFilePicker = (opts: unknown) => Promise<FileSystemFileHandle[]>;
+
+// Pick a new file to save to
+async function pickNewFile(fileName: string): Promise<FileSystemFileHandle> {
+	return (window as unknown as { showSaveFilePicker: ShowSaveFilePicker })
+		.showSaveFilePicker({
+			suggestedName: fileName,
+			types: [{ description: 'File', accept: { 'application/octet-stream': [] } }]
+		});
+}
+
+// Pick an existing partial file to resume
+async function pickExistingFile(): Promise<FileSystemFileHandle> {
+	const [handle] = await (window as unknown as { showOpenFilePicker: ShowOpenFilePicker })
+		.showOpenFilePicker({ multiple: false });
+	return handle;
+}
+
 export async function downloadAndDecrypt(
 	cdnUrl: string,
 	fileName: string,
 	encryptionKey: CryptoKey,
 	onProgress?: ProgressCallback,
 	abortSignal?: AbortSignal,
-	totalChunks?: number
+	totalChunks?: number,
+	resumeExisting?: boolean
 ): Promise<void> {
 	if (!totalChunks) {
 		totalChunks = await probeChunkCount(cdnUrl);
@@ -35,24 +55,25 @@ export async function downloadAndDecrypt(
 		throw new Error('File System Access API not supported. Please use Chrome or Edge.');
 	}
 
-	const handle = await (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> })
-		.showSaveFilePicker({
-			suggestedName: fileName,
-			types: [{ description: 'File', accept: { 'application/octet-stream': [] } }]
-		});
+	let handle: FileSystemFileHandle;
+	let startChunk = 1;
 
-	// Detect resume: check if the file already has content
-	const existingFile = await handle.getFile();
-	const existingSize = existingFile.size;
-	// Each decrypted chunk is exactly PART_SIZE (except possibly the last)
-	const completedChunks = existingSize > 0 ? Math.floor(existingSize / PART_SIZE) : 0;
-	const startChunk = completedChunks + 1;
-	const isResume = completedChunks > 0 && completedChunks < totalChunks;
+	if (resumeExisting) {
+		// Open existing partial file
+		handle = await pickExistingFile();
+		const existingFile = await handle.getFile();
+		const completedChunks = existingFile.size > 0 ? Math.floor(existingFile.size / PART_SIZE) : 0;
+		if (completedChunks > 0 && completedChunks < totalChunks) {
+			startChunk = completedChunks + 1;
+		}
+	} else {
+		handle = await pickNewFile(fileName);
+	}
 
+	const isResume = startChunk > 1;
 	const writable = await handle.createWritable({ keepExistingData: isResume });
 	if (isResume) {
-		// Truncate to exact chunk boundary (in case last write was partial)
-		const safeSize = completedChunks * PART_SIZE;
+		const safeSize = (startChunk - 1) * PART_SIZE;
 		await writable.truncate(safeSize);
 		await writable.seek(safeSize);
 	}
@@ -67,9 +88,7 @@ export async function downloadAndDecrypt(
 		});
 	};
 
-	if (isResume) {
-		report(completedChunks, 'downloading');
-	}
+	if (isResume) report(startChunk - 1, 'downloading');
 
 	try {
 		for (let i = startChunk; i <= totalChunks; i++) {

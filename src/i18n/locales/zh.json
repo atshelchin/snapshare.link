@@ -148,7 +148,8 @@
 		"selectFileToResume": "请重新选择同一文件以恢复上传",
 		"fileMismatch": "文件与原始上传不匹配，请选择正确的文件",
 		"sessionExpired": "上传会话已过期，正在重新创建...",
-		"alreadyDownloaded": "此文件之前已下载过，确定再次下载？",
+		"resumeDownload": "继续下载",
+		"resumeDownloadTip": "选择之前下载到一半的文件，从断点继续",
 		"vaultBrief": "7/30 天存储 · 端到端加密"
 	},
 	"privacy": {

@@ -195,7 +195,7 @@
 		return `${hours}h`;
 	}
 
-	async function handleDownload(file: VaultFile) {
+	async function handleDownload(file: VaultFile, resumeExisting = false) {
 		if (!encryptionKey || downloadingFile) return;
 
 		if (!isFileSystemAccessSupported()) {
@@ -220,7 +220,8 @@
 				encryptionKey,
 				(progress) => { downloadProgress = { ...progress }; },
 				ctrl.signal,
-				file.partsTotal
+				file.partsTotal,
+				resumeExisting
 			);
 		} catch {
 			// error already reported via progress callback
@@ -332,13 +333,23 @@
 										</button>
 									</div>
 								{:else}
-									<button
-										class="btn btn-secondary btn-small"
-										onclick={() => handleDownload(file)}
-										disabled={!!downloadingFile}
-									>
-										{i18n.t('channel.fileItem.download')}
-									</button>
+									<div class="download-buttons">
+										<button
+											class="btn btn-secondary btn-small"
+											onclick={() => handleDownload(file)}
+											disabled={!!downloadingFile}
+										>
+											{i18n.t('channel.fileItem.download')}
+										</button>
+										<button
+											class="btn btn-secondary btn-small"
+											onclick={() => handleDownload(file, true)}
+											disabled={!!downloadingFile}
+											title={i18n.t('vault.resumeDownloadTip')}
+										>
+											{i18n.t('vault.resumeDownload')}
+										</button>
+									</div>
 								{/if}
 							</div>
 						</div>
@@ -677,6 +688,8 @@
 	}
 
 	.status-pending { color: var(--color-primary); font-weight: var(--font-medium); }
+	.download-buttons { display: flex; gap: var(--space-1); }
+
 	.download-progress-mini {
 		display: flex;
 		align-items: center;
