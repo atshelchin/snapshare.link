@@ -84,7 +84,7 @@
 			const keyStr = await exportKeyToBase64Url(key);
 			vaultChannelId = 'vault-' + keyStr.slice(0, 16);
 			const name = await getPasskeyDisplayName(credentialId);
-			userName = name || credentialId.slice(0, 12) + '...';
+			userName = name || '';
 			isAuthenticated = true;
 			await saveSession(key, vaultChannelId, userName);
 		} catch (e: unknown) {
@@ -240,10 +240,7 @@
 	<div class="vault-page">
 		<div class="vault-header">
 			<div class="vault-header-left">
-				<h1 class="vault-title">📦 {i18n.t('vault.title')}</h1>
-				{#if userName}
-					<span class="vault-user">{userName}</span>
-				{/if}
+				<h1 class="vault-title">📦 {i18n.t('vault.title')}{#if userName} · {userName}{/if}</h1>
 			</div>
 			<div class="vault-header-actions">
 				<button class="btn btn-secondary btn-small" onclick={logout}>
@@ -426,15 +423,7 @@
 		margin: 0;
 	}
 
-	.vault-user {
-		font-size: var(--text-sm);
-		color: var(--color-muted-foreground);
-		background: var(--color-panel-2);
-		padding: var(--space-1) var(--space-3);
-		border-radius: var(--radius-full);
-	}
-
-	.vault-notice {
+.vault-notice {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);

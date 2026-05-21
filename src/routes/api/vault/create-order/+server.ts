@@ -1,5 +1,7 @@
 import type { RequestHandler } from './$types';
 import { nanoid } from 'nanoid';
+import { drizzle } from 'drizzle-orm/d1';
+import { paidFiles } from '$lib/server/db/schema';
 import {
 	calculatePrice,
 	calculateParts,
@@ -35,7 +37,10 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const masterSeed = env.PAYMENT_MASTER_SEED || 'dev-seed-change-in-production';
 		const { address: paymentAddress } = derivePaymentAddress(masterSeed, orderId);
 
-		// Store order in KV with 1 hour TTL (enough time to pay)
+		const now = Date.now();
+		const expiresAt = now + planConfig.days * 24 * 60 * 60 * 1000;
+
+		// Store order in KV with 1 hour TTL (for payment polling)
 		await (env as unknown as { KV: { put: (key: string, value: string, options?: { expirationTtl: number }) => Promise<void> } }).KV.put(
 			`vault-order:${orderId}`,
 			JSON.stringify({
@@ -47,10 +52,26 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				amount: pricing.priceUSDC,
 				paymentAddress,
 				partsTotal,
-				createdAt: Date.now()
+				createdAt: now
 			}),
 			{ expirationTtl: 3600 }
 		);
+
+		// Persist order to D1 so orderId is never lost (needed for fund sweeping)
+		const db = drizzle(platform?.env!.DB);
+		await db.insert(paidFiles).values({
+			file_key: orderId, // temporary PK, replaced when upload starts
+			order_id: orderId,
+			payment_address: paymentAddress,
+			channel_id: channelId,
+			file_name: fileHash,
+			file_size: fileSize,
+			payment_amount: pricing.priceUSDC,
+			upload_status: 'pending',
+			parts_total: partsTotal,
+			expires_at: expiresAt,
+			created_at: now
+		});
 
 		return Response.json({
 			success: true,

@@ -27,6 +27,8 @@ export const paidFiles = sqliteTable(
 	'paid_files',
 	{
 		file_key: text().primaryKey(),
+		order_id: text(), // nanoid, 用于派生 payment address
+		payment_address: text(), // 派生的收款地址
 		channel_id: text().notNull(),
 		file_name: text().notNull(),
 		file_size: integer().notNull(), // 原始文件大小（字节）
@@ -38,6 +40,7 @@ export const paidFiles = sqliteTable(
 		parts_total: integer().default(0),
 		parts_done: integer().default(0),
 		uploader_hash_ip: text(),
+		swept: integer().notNull().default(0), // 0=未归集 1=已归集
 		expires_at: integer().notNull(), // 30天后的时间戳
 		created_at: integer().notNull()
 	},

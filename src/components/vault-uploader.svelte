@@ -404,7 +404,13 @@
 			<div class="payment-details">
 				<div class="payment-row">
 					<span>{i18n.t('vault.network')}</span>
-					<span class="payment-value payment-chain">Base</span>
+					<span class="payment-value payment-chain">
+						<svg width="14" height="14" viewBox="0 0 111 111" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="55.5" cy="55.5" r="55.5" fill="white"/>
+							<path d="M55.3909 93.2691C76.1977 93.2691 93.0591 76.4077 93.0591 55.6009C93.0591 34.7941 76.1977 17.9327 55.3909 17.9327C35.6631 17.9327 19.4756 33.1256 17.8027 52.4173H65.1877V58.7845H17.8027C19.4756 78.0762 35.6631 93.2691 55.3909 93.2691Z" fill="#0052FF"/>
+						</svg>
+						Base
+					</span>
 				</div>
 				<div class="payment-row">
 					<span>{i18n.t('vault.token')}</span>
@@ -588,8 +594,8 @@
 	.payment-value { font-weight: var(--font-medium); color: var(--color-foreground); }
 	.payment-amount-row { padding: var(--space-2) 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
 	.payment-amount { font-size: var(--text-lg); font-weight: var(--font-semibold); color: var(--color-primary); }
-	.payment-chain { background: #0052ff; color: white; padding: 1px 8px; border-radius: var(--radius-full); font-size: var(--text-xs); }
-	.payment-address { font-family: var(--font-family-mono, monospace); font-size: var(--text-xs); }
+	.payment-chain { display: inline-flex; align-items: center; gap: 4px; background: #0052ff; color: white; padding: 2px 8px; border-radius: var(--radius-full); font-size: var(--text-xs); }
+	.payment-address { font-family: var(--font-family-mono, monospace); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 60%; }
 
 	/* Progress */
 	.vault-progress, .vault-failed, .vault-complete { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -608,6 +614,7 @@
 	.complete-title { font-size: var(--text-xl); font-weight: var(--font-semibold); color: var(--color-foreground); }
 	.complete-meta { font-size: var(--text-sm); color: var(--color-muted-foreground); }
 
-	.spinner { width: 18px; height: 18px; border: 2px solid var(--color-border); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 1s linear infinite; }
+	.payment-polling { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-muted-foreground); }
+	.spinner { width: 18px; height: 18px; border: 2px solid var(--color-border); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 1s linear infinite; flex-shrink: 0; }
 	@keyframes spin { to { transform: rotate(360deg); } }
 </style>

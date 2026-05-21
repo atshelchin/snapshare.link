@@ -15,6 +15,13 @@
       "when": 1779341144710,
       "tag": "0001_long_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779342062393,
+      "tag": "0002_slim_sersi",
+      "breakpoints": true
     }
   ]
 }
