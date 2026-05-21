@@ -1,13 +1,8 @@
 // Streaming decrypt-to-disk download for vault files
-// Downloads encrypted chunks via Range requests, decrypts each in memory (~200MB peak),
-// and writes directly to disk via File System Access API.
+// Each chunk is a separate R2 object: {fileKey}/{partNumber}
+// Downloads each chunk, decrypts, and writes to disk via File System Access API.
 
 import { decryptFile } from '$lib/crypto';
-
-import { PART_SIZE } from '$lib/vault';
-
-const ENCRYPT_OVERHEAD = 12 + 16; // IV (12) + AES-GCM auth tag (16)
-const ENCRYPTED_CHUNK_SIZE = PART_SIZE + ENCRYPT_OVERHEAD;
 
 export interface DownloadProgress {
 	totalChunks: number;
@@ -24,27 +19,21 @@ export function isFileSystemAccessSupported(): boolean {
 	return typeof window !== 'undefined' && 'showSaveFilePicker' in window;
 }
 
-// Get the encrypted file size by doing a HEAD request
-async function getEncryptedFileSize(url: string): Promise<number> {
-	const resp = await fetch(url, { method: 'HEAD' });
-	const contentLength = resp.headers.get('content-length');
-	if (!contentLength) throw new Error('Cannot determine file size');
-	return parseInt(contentLength, 10);
-}
-
-// Download, decrypt, and save to disk in streaming chunks
+// Download, decrypt, and save to disk — one chunk at a time
 export async function downloadAndDecrypt(
 	cdnUrl: string,
 	fileName: string,
 	encryptionKey: CryptoKey,
 	onProgress?: ProgressCallback,
-	abortSignal?: AbortSignal
+	abortSignal?: AbortSignal,
+	totalChunks?: number
 ): Promise<void> {
-	// 1. Get encrypted file size
-	const encryptedSize = await getEncryptedFileSize(cdnUrl);
-	const totalChunks = Math.ceil(encryptedSize / ENCRYPTED_CHUNK_SIZE);
+	// If totalChunks not provided, probe to find how many chunks exist
+	if (!totalChunks) {
+		totalChunks = await probeChunkCount(cdnUrl);
+	}
 
-	// 2. Prompt user to pick save location
+	// Prompt user to pick save location
 	let writable: FileSystemWritableFileStream;
 	if (isFileSystemAccessSupported()) {
 		const handle = await (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> })
@@ -59,39 +48,32 @@ export async function downloadAndDecrypt(
 			});
 		writable = await handle.createWritable();
 	} else {
-		// Fallback: collect all chunks in memory (only for smaller files)
 		throw new Error('File System Access API not supported. Please use Chrome or Edge.');
 	}
 
 	const report = (completedChunks: number, status: DownloadProgress['status'], error?: string) => {
 		onProgress?.({
-			totalChunks,
+			totalChunks: totalChunks!,
 			completedChunks,
-			percent: totalChunks > 0 ? (completedChunks / totalChunks) * 100 : 0,
+			percent: totalChunks! > 0 ? (completedChunks / totalChunks!) * 100 : 0,
 			status,
 			error
 		});
 	};
 
 	try {
-		for (let i = 0; i < totalChunks; i++) {
+		for (let i = 1; i <= totalChunks; i++) {
 			if (abortSignal?.aborted) {
 				await writable.abort();
-				report(i, 'cancelled');
+				report(i - 1, 'cancelled');
 				return;
 			}
 
-			const start = i * ENCRYPTED_CHUNK_SIZE;
-			const end = Math.min(start + ENCRYPTED_CHUNK_SIZE - 1, encryptedSize - 1);
+			// Download chunk {fileKey}/{partNumber}
+			const resp = await fetch(`${cdnUrl}/${i}`, { signal: abortSignal });
 
-			// Download one encrypted chunk
-			const resp = await fetch(cdnUrl, {
-				headers: { Range: `bytes=${start}-${end}` },
-				signal: abortSignal
-			});
-
-			if (!resp.ok && resp.status !== 206) {
-				throw new Error(`Download failed: HTTP ${resp.status}`);
+			if (!resp.ok) {
+				throw new Error(`Download chunk ${i} failed: HTTP ${resp.status}`);
 			}
 
 			const encryptedChunk = await resp.arrayBuffer();
@@ -99,10 +81,10 @@ export async function downloadAndDecrypt(
 			// Decrypt
 			const decrypted = await decryptFile(encryptionKey, encryptedChunk);
 
-			// Write to disk immediately — memory is freed
+			// Write to disk immediately
 			await writable.write(decrypted);
 
-			report(i + 1, 'downloading');
+			report(i, 'downloading');
 		}
 
 		await writable.close();
@@ -117,4 +99,33 @@ export async function downloadAndDecrypt(
 		report(0, 'failed', errorMsg);
 		throw e;
 	}
+}
+
+// Probe how many chunks exist by binary search on HEAD requests
+async function probeChunkCount(cdnUrl: string): Promise<number> {
+	// Quick check: does chunk 1 exist?
+	const r1 = await fetch(`${cdnUrl}/1`, { method: 'HEAD' });
+	if (!r1.ok) throw new Error('No chunks found for this file');
+
+	// Binary search for the last chunk
+	let low = 1;
+	let high = 2;
+
+	// First find an upper bound
+	while (true) {
+		const r = await fetch(`${cdnUrl}/${high}`, { method: 'HEAD' });
+		if (!r.ok) break;
+		low = high;
+		high *= 2;
+	}
+
+	// Binary search between low and high
+	while (low < high - 1) {
+		const mid = Math.floor((low + high) / 2);
+		const r = await fetch(`${cdnUrl}/${mid}`, { method: 'HEAD' });
+		if (r.ok) low = mid;
+		else high = mid;
+	}
+
+	return low;
 }

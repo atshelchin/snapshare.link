@@ -41,7 +41,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				createdAt: f.created_at,
 				uploadStatus: f.upload_status,
 				orderId: f.order_id,
-				originalName: f.original_name
+				originalName: f.original_name,
+				partsTotal: f.parts_total
 			}))
 		});
 	} catch (error) {

@@ -141,6 +141,7 @@
 		uploadStatus?: string;
 		orderId?: string;
 		originalName?: string;
+		partsTotal?: number;
 		displayName?: string;
 	}
 
@@ -219,7 +220,8 @@
 				fileName,
 				encryptionKey,
 				(progress) => { downloadProgress = { ...progress }; },
-				ctrl.signal
+				ctrl.signal,
+				file.partsTotal
 			);
 		} catch {
 			// error already reported via progress callback
