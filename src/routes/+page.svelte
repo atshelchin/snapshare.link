@@ -170,24 +170,26 @@
 
 	.button-group {
 		display: flex;
+		flex-direction: column;
 		gap: var(--space-3);
-		justify-content: center;
-		flex-wrap: wrap;
 	}
 
 	.button-privacy {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: var(--space-2);
-		background: var(--color-panel-1);
-		color: var(--color-foreground);
-		border: 2px solid var(--color-border);
+		background: transparent;
+		color: var(--brand-600);
+		border: 2px solid var(--brand-400);
 		transition: all 0.2s ease;
+		font-weight: 600;
 	}
 
 	.button-privacy:hover:not(:disabled) {
-		border-color: var(--brand-400);
-		background: var(--color-panel-2);
+		background: var(--brand-600);
+		border-color: var(--brand-600);
+		color: white;
 	}
 
 	.button-privacy:disabled {
@@ -249,14 +251,14 @@
 	}
 
 	.tips {
-		margin-top: 160px;
+		margin-top: 60px;
 	}
 	@media (max-width: 768px) {
 		.room-input-group {
 			margin-top: 100px;
 		}
-		.button-group {
-			flex-direction: column;
+		.tips {
+			margin-top: 40px;
 		}
 	}
 </style>
