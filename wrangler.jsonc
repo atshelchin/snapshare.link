@@ -16,7 +16,7 @@
 			"binding": "DB",
 			"database_name": "snapshare",
 			"database_id": "e2fc286d-416d-4aeb-8c8b-8116ea4e8e48",
-			"migrations_dir": "drizzle/migrations"
+			"migrations_dir": "drizzle"
 		}
 	],
 	"assets": {
