@@ -100,7 +100,7 @@
 		"subtitle": "7/30-day storage, any file size, USDC payment",
 		"selectFile": "Select a file to upload",
 		"dragOrClick": "Click or drag file here",
-		"noSizeLimit": "Large file support · Up to 4TB per file · Min 1GB billing",
+		"noSizeLimit": "No size limit · Min 1GB billing",
 		"loginWithPasskey": "Login with Passkey",
 		"pricing": "Pricing",
 		"pricePerGB": "From $0.01/GB",

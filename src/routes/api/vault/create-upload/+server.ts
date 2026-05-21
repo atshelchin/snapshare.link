@@ -4,7 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { paidFiles } from '$lib/server/db/schema';
 import { hashIP } from '$lib';
 import {
-	createMultipartUpload,
+	generateFileKey,
 	calculateParts,
 	STORAGE_PLANS,
 	type VaultEnv,
@@ -33,7 +33,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const storagePlan = plan as StoragePlan;
 		const planConfig = STORAGE_PLANS[storagePlan];
 
-		// Check if this file already uploaded successfully (no re-payment needed)
+		// Check if this file already uploaded successfully
 		const existingFile = await db
 			.select()
 			.from(paidFiles)
@@ -60,7 +60,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		if (orderData) {
 			order = JSON.parse(orderData);
 		} else {
-			// KV expired, recover from D1 (check both file_key and order_id)
 			let d1Order = await db.select().from(paidFiles)
 				.where(eq(paidFiles.order_id, orderId)).limit(1).all();
 			if (!d1Order.length) {
@@ -78,12 +77,11 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			};
 		}
 
-		// Verify order belongs to this channel and file
 		if (order.channelId !== channelId || order.fileHash !== fileHash) {
 			return Response.json({ success: false, error: 'Order does not match' }, { status: 403 });
 		}
 
-		// Verify payment at the order's unique address
+		// Verify payment
 		const payment = await checkPaymentToAddress(order.paymentAddress, order.amount);
 		if (!payment.paid) {
 			return Response.json(
@@ -98,7 +96,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			'unknown';
 		const uploaderHashIp = await hashIP(userIP);
 
-		const { uploadId, fileKey } = await createMultipartUpload(env, fileName, storagePlan);
+		const fileKey = generateFileKey();
 		const partsTotal = calculateParts(fileSize);
 		const expiresAt = Date.now() + planConfig.days * 24 * 60 * 60 * 1000;
 
@@ -106,7 +104,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const pendingRecord = await db.select({ private_key: paidFiles.private_key, original_name: paidFiles.original_name })
 			.from(paidFiles).where(eq(paidFiles.order_id, orderId)).limit(1).all();
 
-		// Replace the pending order record with real upload record
+		// Replace the pending order record with upload record
 		await db.delete(paidFiles).where(eq(paidFiles.order_id, orderId));
 		await db.insert(paidFiles).values({
 			file_key: fileKey,
@@ -120,7 +118,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			encrypted: encrypted ? 1 : 0,
 			payment_tx: payment.txHash || orderId,
 			payment_amount: order.amount,
-			upload_id: uploadId,
 			upload_status: 'uploading',
 			parts_total: partsTotal,
 			parts_done: 0,
@@ -131,7 +128,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		return Response.json({
 			success: true,
-			data: { fileKey, uploadId, partsTotal, expiresAt, plan: storagePlan }
+			data: { fileKey, partsTotal, expiresAt, plan: storagePlan }
 		});
 	} catch (error) {
 		return Response.json({ success: false, error: String(error) }, { status: 500 });

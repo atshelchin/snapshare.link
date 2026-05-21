@@ -1,21 +1,21 @@
-// Data Vault: paid multipart upload utilities for large files
-// Uses S3-compatible API for R2 multipart uploads with presigned URLs
-// Server-side ops use raw fetch to avoid DOMParser issue in Workers
+// Data Vault: paid upload utilities for large files
+// Each encrypted chunk is stored as a separate R2 object: {fileKey}/{partNumber}
+// No multipart upload — no 10,000 part limit, no CompleteMultipartUpload
 
 import {
 	S3Client,
-	UploadPartCommand,
+	PutObjectCommand,
+	HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import type { Env } from '$lib';
-import { AwsV4Signer } from 'aws4fetch';
 
-// 100MB per part
-export const PART_SIZE = 10 * 1024 * 1024; // 10MB per part (R2 minimum is 5MB)
+// Fixed 10MB per chunk
+export const PART_SIZE = 10 * 1024 * 1024;
 
-// Max file size: 4TB
-export const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024 * 1024;
+// No hard file size limit — practically limited by storage cost
+export const MAX_FILE_SIZE = Infinity;
 
 // Storage plans
 export type StoragePlan = '7d' | '30d';
@@ -48,10 +48,6 @@ function getBucketName(_env: VaultEnv, plan: StoragePlan): string {
 	return plan === '7d' ? 'paid-snapshare-7days' : 'paid-snapshare';
 }
 
-function getR2Endpoint(env: VaultEnv): string {
-	return `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com`;
-}
-
 // Calculate price in USDC
 export function calculatePrice(
 	fileSizeBytes: number,
@@ -81,184 +77,60 @@ export function calculateParts(fileSizeBytes: number): number {
 	return Math.ceil(fileSizeBytes / PART_SIZE);
 }
 
-// Create a multipart upload via raw S3 API (avoids DOMParser)
-export async function createMultipartUpload(
-	env: VaultEnv,
-	fileName: string,
-	plan: StoragePlan
-): Promise<{ uploadId: string; fileKey: string }> {
+// Generate a unique fileKey for a new upload
+export function generateFileKey(): string {
 	const uuid = nanoid();
 	const now = new Date();
 	const prefix = now.toISOString().slice(0, 10);
-	const fileKey = `vault/${prefix}/${uuid}`;
-	const endpoint = getR2Endpoint(env);
-	const bucket = getBucketName(env, plan);
-
-	const signer = new AwsV4Signer({
-		accessKeyId: env.ACCESS_KEY_ID,
-		secretAccessKey: env.SECRET_ACCESS_KEY,
-		region: 'auto',
-		service: 's3',
-		url: `${endpoint}/${bucket}/${fileKey}?uploads`,
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/octet-stream',
-			'x-amz-meta-original-name': encodeURIComponent(fileName)
-		}
-	});
-
-	const signed = await signer.sign();
-	const resp = await fetch(signed.url, {
-		method: 'POST',
-		headers: signed.headers
-	});
-
-	if (!resp.ok) {
-		const text = await resp.text();
-		throw new Error(`CreateMultipartUpload failed: ${resp.status} ${text}`);
-	}
-
-	const xml = await resp.text();
-	const uploadIdMatch = xml.match(/<UploadId>(.+?)<\/UploadId>/);
-	if (!uploadIdMatch) throw new Error('No UploadId in response');
-
-	return { uploadId: uploadIdMatch[1], fileKey };
+	return `vault/${prefix}/${uuid}`;
 }
 
-// Generate a presigned URL for uploading a single part
-export async function getPartUploadUrl(
+// Generate a presigned PUT URL for a single chunk: {fileKey}/{partNumber}
+export async function getChunkUploadUrl(
 	env: VaultEnv,
 	fileKey: string,
-	uploadId: string,
 	partNumber: number,
 	plan: StoragePlan
 ): Promise<string> {
 	const s3 = createS3Client(env);
 	const bucket = getBucketName(env, plan);
 
-	const command = new UploadPartCommand({
+	const command = new PutObjectCommand({
 		Bucket: bucket,
-		Key: fileKey,
-		UploadId: uploadId,
-		PartNumber: partNumber
+		Key: `${fileKey}/${partNumber}`,
+		ContentType: 'application/octet-stream'
 	});
 
 	return getSignedUrl(s3, command, { expiresIn: 3600 });
 }
 
-// List uploaded parts to get their ETags from R2
-async function listParts(
+// Check which chunks have been uploaded (for resume)
+export async function getUploadedParts(
 	env: VaultEnv,
 	fileKey: string,
-	uploadId: string,
+	partsTotal: number,
 	plan: StoragePlan
-): Promise<{ partNumber: number; etag: string }[]> {
-	const endpoint = getR2Endpoint(env);
+): Promise<number[]> {
+	const s3 = createS3Client(env);
 	const bucket = getBucketName(env, plan);
-	const allParts: { partNumber: number; etag: string }[] = [];
-	let marker = '';
+	const uploaded: number[] = [];
 
-	// Paginate through all parts (max 1000 per request)
-	while (true) {
-		const params = `uploadId=${uploadId}${marker ? `&part-number-marker=${marker}` : ''}`;
-		const signer = new AwsV4Signer({
-			accessKeyId: env.ACCESS_KEY_ID,
-			secretAccessKey: env.SECRET_ACCESS_KEY,
-			region: 'auto',
-			service: 's3',
-			url: `${endpoint}/${bucket}/${fileKey}?${params}`,
-			method: 'GET'
-		});
-
-		const signed = await signer.sign();
-		const resp = await fetch(signed.url, { headers: signed.headers });
-		if (!resp.ok) {
-			const text = await resp.text();
-			throw new Error(`ListParts failed: ${resp.status} ${text}`);
+	// Check each part with HEAD (batch in parallel, 20 at a time)
+	for (let i = 0; i < partsTotal; i += 20) {
+		const batch = [];
+		for (let j = i; j < Math.min(i + 20, partsTotal); j++) {
+			batch.push(
+				s3.send(new HeadObjectCommand({
+					Bucket: bucket,
+					Key: `${fileKey}/${j + 1}`
+				})).then(() => j + 1).catch(() => null)
+			);
 		}
-
-		const xml = await resp.text();
-		const partMatches = xml.matchAll(/<Part><PartNumber>(\d+)<\/PartNumber><ETag>(.+?)<\/ETag>/g);
-		for (const m of partMatches) {
-			allParts.push({ partNumber: parseInt(m[1]), etag: m[2] });
+		const results = await Promise.all(batch);
+		for (const r of results) {
+			if (r !== null) uploaded.push(r);
 		}
-
-		const isTruncated = xml.includes('<IsTruncated>true</IsTruncated>');
-		if (!isTruncated) break;
-		const nextMarker = xml.match(/<NextPartNumberMarker>(\d+)<\/NextPartNumberMarker>/);
-		if (!nextMarker) break;
-		marker = nextMarker[1];
 	}
 
-	return allParts.sort((a, b) => a.partNumber - b.partNumber);
-}
-
-// Complete the multipart upload — fetches ETags from R2 via ListParts
-export async function completeMultipartUpload(
-	env: VaultEnv,
-	fileKey: string,
-	uploadId: string,
-	_parts: { partNumber: number; etag: string }[], // kept for API compat, ignored
-	plan: StoragePlan
-): Promise<void> {
-	const endpoint = getR2Endpoint(env);
-	const bucket = getBucketName(env, plan);
-
-	// Get real ETags from R2 instead of trusting client
-	const parts = await listParts(env, fileKey, uploadId, plan);
-	if (parts.length === 0) throw new Error('No parts found for this upload');
-
-	const partsXml = parts
-		.map((p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${p.etag}</ETag></Part>`)
-		.join('');
-	const body = `<CompleteMultipartUpload>${partsXml}</CompleteMultipartUpload>`;
-
-	const signer = new AwsV4Signer({
-		accessKeyId: env.ACCESS_KEY_ID,
-		secretAccessKey: env.SECRET_ACCESS_KEY,
-		region: 'auto',
-		service: 's3',
-		url: `${endpoint}/${bucket}/${fileKey}?uploadId=${uploadId}`,
-		method: 'POST',
-		headers: { 'Content-Type': 'application/xml' },
-		body
-	});
-
-	const signed = await signer.sign();
-	const resp = await fetch(signed.url, {
-		method: 'POST',
-		headers: signed.headers,
-		body
-	});
-
-	if (!resp.ok) {
-		const text = await resp.text();
-		throw new Error(`CompleteMultipartUpload failed: ${resp.status} ${text}`);
-	}
-}
-
-// Abort a multipart upload via raw S3 API
-export async function abortMultipartUpload(
-	env: VaultEnv,
-	fileKey: string,
-	uploadId: string,
-	plan: StoragePlan
-): Promise<void> {
-	const endpoint = getR2Endpoint(env);
-	const bucket = getBucketName(env, plan);
-
-	const signer = new AwsV4Signer({
-		accessKeyId: env.ACCESS_KEY_ID,
-		secretAccessKey: env.SECRET_ACCESS_KEY,
-		region: 'auto',
-		service: 's3',
-		url: `${endpoint}/${bucket}/${fileKey}?uploadId=${uploadId}`,
-		method: 'DELETE'
-	});
-
-	const signed = await signer.sign();
-	await fetch(signed.url, {
-		method: 'DELETE',
-		headers: signed.headers
-	});
+	return uploaded.sort((a, b) => a - b);
 }

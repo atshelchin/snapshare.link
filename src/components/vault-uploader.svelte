@@ -6,7 +6,9 @@
 	import CopyButton from './copy-button.svelte';
 
 	const i18n = useI18n();
-	const PART_SIZE = 10 * 1024 * 1024; // 10MB, must match server
+	import { PART_SIZE } from '$lib/vault';
+
+	const partSize = PART_SIZE;
 
 	type StoragePlan = '7d' | '30d';
 
@@ -25,8 +27,6 @@
 			lastResumeOrderId = resumeOrderId;
 			selectedFile = null;
 			fileKey = '';
-			uploadId = '';
-			completedParts = [];
 			partsDone = 0;
 			orderId = resumeOrderId;
 			uploadState = 'failed';
@@ -62,11 +62,9 @@
 
 	// Upload tracking
 	let fileKey = $state('');
-	let uploadId = $state('');
 	let partsTotal = $state(0);
 	let partsDone = $state(0);
 	let currentPartProgress = $state(0);
-	let completedParts = $state<{ partNumber: number; etag: string }[]>([]);
 	let isPaused = $state(false);
 	let abortController = $state<AbortController | null>(null);
 
@@ -270,8 +268,8 @@
 		error = '';
 		uploadStartTime = Date.now();
 
-		// If we already have fileKey/uploadId (resumed from localStorage), skip create-upload
-		if (fileKey && uploadId) {
+		// If resuming from localStorage with existing fileKey, skip create-upload
+		if (fileKey && partsTotal > 0) {
 			isPaused = false;
 			await uploadParts();
 			return;
@@ -305,11 +303,8 @@
 			}
 
 			fileKey = data.data.fileKey;
-			uploadId = data.data.uploadId;
 			partsTotal = data.data.partsTotal;
-			partsDone = data.data.partsDone || 0;
-			// Only reset completedParts for fresh uploads, not resumes
-			if (!data.data.resumed) completedParts = [];
+			partsDone = 0;
 			currentPartProgress = 0;
 			isPaused = false;
 
@@ -371,7 +366,7 @@
 				const resp = await fetch('/api/vault/complete-upload', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ fileKey, uploadId, parts: completedParts, plan: selectedPlan })
+					body: JSON.stringify({ fileKey, partsTotal, plan: selectedPlan })
 				});
 				const data = await resp.json();
 				if (data.success) {
@@ -404,11 +399,8 @@
 		const data = await resp.json();
 		if (!data.success) throw new Error(data.error || 'Failed to recreate upload session');
 		fileKey = data.data.fileKey;
-		uploadId = data.data.uploadId;
 		partsTotal = data.data.partsTotal;
-		// Reset progress — new session means all parts must be re-uploaded
 		partsDone = 0;
-		completedParts = [];
 		currentPartProgress = 0;
 		saveUploadState();
 	}
@@ -419,19 +411,19 @@
 		const urlResp = await fetch('/api/vault/get-part-url', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ fileKey, uploadId, partNumber, plan: selectedPlan })
+			body: JSON.stringify({ fileKey, partNumber, plan: selectedPlan })
 		});
 		const urlData = await urlResp.json();
 		if (!urlData.success) throw new Error(urlData.error);
 
-		const start = (partNumber - 1) * PART_SIZE;
-		const end = Math.min(start + PART_SIZE, selectedFile.size);
+		const start = (partNumber - 1) * partSize;
+		const end = Math.min(start + partSize, selectedFile.size);
 		const chunk = selectedFile.slice(start, end);
 		let chunkData: ArrayBuffer = await chunk.arrayBuffer();
 
 		chunkData = await encryptFile(encryptionKey, chunkData);
 
-		const etag = await new Promise<string>((resolve, reject) => {
+		await new Promise<void>((resolve, reject) => {
 			const ctrl = new AbortController();
 			abortController = ctrl;
 			const xhr = new XMLHttpRequest();
@@ -440,7 +432,7 @@
 				if (e.lengthComputable) currentPartProgress = (e.loaded / e.total) * 100;
 			});
 			xhr.addEventListener('load', () => {
-				if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.getResponseHeader('ETag') || '');
+				if (xhr.status >= 200 && xhr.status < 300) resolve();
 				else reject(new Error(`HTTP ${xhr.status}`));
 			});
 			xhr.addEventListener('error', () => reject(new Error('Network error')));
@@ -449,10 +441,6 @@
 			xhr.send(new Blob([chunkData]));
 		});
 
-		if (!etag) throw new Error('No ETag in response — check R2 CORS ExposeHeaders includes ETag');
-
-		// Avoid duplicates if retrying a part that partially succeeded
-		completedParts = [...completedParts.filter(p => p.partNumber !== partNumber), { partNumber, etag }];
 		abortController = null;
 	}
 
@@ -462,15 +450,6 @@
 	async function cancelUpload() {
 		isPaused = true;
 		abortController?.abort();
-		if (fileKey && uploadId) {
-			try {
-				await fetch('/api/vault/abort-upload', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ fileKey, uploadId, plan: selectedPlan })
-				});
-			} catch (e) { console.warn('Failed to abort:', e); }
-		}
 		clearUploadState();
 		resetState();
 	}
@@ -484,11 +463,9 @@
 		uploadState = 'idle';
 		error = '';
 		fileKey = '';
-		uploadId = '';
 		partsTotal = 0;
 		partsDone = 0;
 		currentPartProgress = 0;
-		completedParts = [];
 		isPaused = false;
 		orderId = '';
 		paymentAddress = '';
@@ -497,7 +474,7 @@
 
 	function saveUploadState() {
 		localStorage.setItem(`vault-upload:${channelId}`, JSON.stringify({
-			fileKey, uploadId, partsTotal, partsDone, completedParts, plan: selectedPlan, orderId
+			fileKey, partsTotal, partsDone, plan: selectedPlan, orderId
 		}));
 	}
 
@@ -510,8 +487,11 @@
 		if (!saved) return;
 		try {
 			const state = JSON.parse(saved);
-			if (state.orderId && state.partsDone < state.partsTotal) {
-				orderId = state.orderId;
+			if (state.fileKey && state.partsDone < state.partsTotal) {
+				fileKey = state.fileKey;
+				partsTotal = state.partsTotal;
+				partsDone = state.partsDone;
+				orderId = state.orderId || '';
 				selectedPlan = state.plan || '7d';
 				uploadState = 'paused';
 				error = i18n.t('vault.selectFileToResume');

@@ -4,8 +4,8 @@
 
 import { decryptFile } from '$lib/crypto';
 
-// Must match the PART_SIZE used during upload
-const PART_SIZE = 10 * 1024 * 1024; // 10MB, must match upload
+import { PART_SIZE } from '$lib/vault';
+
 const ENCRYPT_OVERHEAD = 12 + 16; // IV (12) + AES-GCM auth tag (16)
 const ENCRYPTED_CHUNK_SIZE = PART_SIZE + ENCRYPT_OVERHEAD;
 

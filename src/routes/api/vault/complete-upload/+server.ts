@@ -2,17 +2,18 @@ import type { RequestHandler } from './$types';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
 import { paidFiles } from '$lib/server/db/schema';
-import { completeMultipartUpload, STORAGE_PLANS, type VaultEnv, type StoragePlan } from '$lib/vault';
+import { getUploadedParts, STORAGE_PLANS, type VaultEnv, type StoragePlan } from '$lib/vault';
 
 export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
 		const db = drizzle(platform?.env!.DB);
 		const env = platform?.env as unknown as VaultEnv;
-		const { fileKey, uploadId, parts, plan = '30d' } = await request.json();
+		const body = await request.json() as { fileKey: string; partsTotal: number; plan?: string };
+		const { fileKey, partsTotal, plan = '30d' } = body;
 
-		if (!fileKey || !uploadId || !parts || !Array.isArray(parts)) {
+		if (!fileKey || !partsTotal) {
 			return Response.json(
-				{ success: false, error: 'Missing required fields: fileKey, uploadId, parts[]' },
+				{ success: false, error: 'Missing required fields: fileKey, partsTotal' },
 				{ status: 400 }
 			);
 		}
@@ -21,14 +22,25 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return Response.json({ success: false, error: 'Invalid plan' }, { status: 400 });
 		}
 
-		// ETags are fetched server-side via ListParts — client ETags ignored
-		await completeMultipartUpload(env, fileKey, uploadId, parts, plan as StoragePlan);
+		// Verify all parts are uploaded
+		const uploaded = await getUploadedParts(env, fileKey, partsTotal, plan as StoragePlan);
+		if (uploaded.length < partsTotal) {
+			const missing = [];
+			for (let i = 1; i <= partsTotal; i++) {
+				if (!uploaded.includes(i)) missing.push(i);
+			}
+			return Response.json({
+				success: false,
+				error: `Missing ${missing.length} parts: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`,
+				data: { uploaded: uploaded.length, missing: missing.length }
+			}, { status: 400 });
+		}
 
 		await db
 			.update(paidFiles)
 			.set({
 				upload_status: 'completed',
-				parts_done: parts.length
+				parts_done: partsTotal
 			})
 			.where(eq(paidFiles.file_key, fileKey));
 
