@@ -12,6 +12,7 @@
 		"description": "快速分享文件、文本、链接 - 无需登录",
 		"tips": "💡 提示：使用相同频道号的人可以看到相同内容",
 		"enter": "进入频道",
+		"privateChannel": "隐私频道",
 		"inputtips": "输入任意频道号，如：mychannel",
 		"channel": {
 			"headertitle": "当前频道",
@@ -92,5 +93,23 @@
 			"audioNotSupported": "您的浏览器不支持音频播放",
 			"videoNotSupported": "您的浏览器不支持视频播放"
 		}
+	},
+	"privacy": {
+		"badge": "隐私频道",
+		"encrypted": "端到端加密",
+		"needFullLink": "这是隐私频道，需要完整链接才能查看内容",
+		"authRequired": "需要 Passkey 验证才能上传",
+		"authenticating": "验证中...",
+		"authSuccess": "验证成功",
+		"authFailed": "验证失败，请重试",
+		"prfNotSupported": "您的浏览器不支持 PRF 扩展，请使用 Chrome 116+ 或 Edge 116+",
+		"webauthnNotSupported": "您的浏览器不支持 WebAuthn",
+		"registerFirst": "首次使用需要注册 Passkey",
+		"register": "注册",
+		"registering": "注册 Passkey 中...",
+		"enterName": "输入你的昵称",
+		"encrypting": "加密中...",
+		"decrypting": "解密中...",
+		"decryptFailed": "解密失败"
 	}
 }

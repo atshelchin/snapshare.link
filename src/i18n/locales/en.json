@@ -12,6 +12,7 @@
 		"description": "Quick File Sharing - No Login Required",
 		"tips": "💡 Tip: People with the same channel ID can see the same content",
 		"enter": "Join Channel",
+		"privateChannel": "Privacy Channel",
 		"inputtips": "Enter any channel ID, e.g: mychannel",
 		"channel": {
 			"headertitle": "Current channel",
@@ -92,5 +93,23 @@
 			"audioNotSupported": "Your browser does not support audio playback",
 			"videoNotSupported": "Your browser does not support video playback"
 		}
+	},
+	"privacy": {
+		"badge": "Privacy Channel",
+		"encrypted": "End-to-end encrypted",
+		"needFullLink": "This is a privacy channel. A full link with key is required to view content",
+		"authRequired": "Passkey authentication required to upload",
+		"authenticating": "Authenticating...",
+		"authSuccess": "Authenticated",
+		"authFailed": "Authentication failed, please retry",
+		"prfNotSupported": "Your browser does not support the PRF extension. Please use Chrome 116+ or Edge 116+",
+		"webauthnNotSupported": "Your browser does not support WebAuthn",
+		"registerFirst": "First time use requires Passkey registration",
+		"register": "Register",
+		"registering": "Registering Passkey...",
+		"enterName": "Enter your display name",
+		"encrypting": "Encrypting...",
+		"decrypting": "Decrypting...",
+		"decryptFailed": "Decryption failed"
 	}
 }

@@ -3,6 +3,7 @@
 	import AudioPlayer from './audio-player.svelte';
 	import VideoPlayer from './video-player.svelte';
 	import { useI18n } from '@shelchin/i18n/svelte';
+	import { decryptFile, decryptString, inferMimeType } from '$lib/crypto';
 
 	interface FileItemData {
 		channel_id: string;
@@ -13,13 +14,34 @@
 		created_at: number;
 	}
 
-	let { file, onImageClick } = $props<{
+	let { file, encryptionKey = null, onImageClick } = $props<{
 		file: FileItemData;
+		encryptionKey?: CryptoKey | null;
 		onImageClick?: (url: string) => void;
 	}>();
 
 	const i18n = useI18n();
 	const fileUrl = `https://cdn.snapshare.link/${file.file_key}`;
+	const isEncrypted = encryptionKey !== null;
+
+	// 解密后的文件名和类型
+	let decryptedName = $state('');
+	let decryptedType = $state<string | null>(null);
+	let isDecryptingName = $state(false);
+
+	// 解密后的预览 blob URL
+	let decryptedBlobUrl = $state<string | null>(null);
+	let isDecryptingContent = $state(false);
+
+	// 显示用的文件名和类型
+	let displayName = $derived(isEncrypted ? (decryptedName || '...') : file.file_name);
+	let displayType = $derived(isEncrypted ? decryptedType : file.file_type);
+
+	// 判断文件类型（基于 displayType）
+	let isImage = $derived(displayType?.startsWith('image/') ?? false);
+	let isAudio = $derived(displayType?.startsWith('audio/') ?? false);
+	let isVideo = $derived(displayType?.startsWith('video/') ?? false);
+	let isText = $derived(displayType?.startsWith('text/') ?? false);
 
 	// 获取文件类型图标
 	function getFileIcon(type: string | null): string {
@@ -46,7 +68,7 @@
 		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 	}
 
-	// 格式化时间 - 显示完整时间和时区
+	// 格式化时间
 	function formatTime(timestamp: number): string {
 		const date = new Date(timestamp);
 
@@ -57,7 +79,6 @@
 		const minutes = String(date.getMinutes()).padStart(2, '0');
 		const seconds = String(date.getSeconds()).padStart(2, '0');
 
-		// 获取时区偏移（分钟）
 		const timezoneOffset = -date.getTimezoneOffset();
 		const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
 		const offsetMinutes = Math.abs(timezoneOffset) % 60;
@@ -67,26 +88,79 @@
 		return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${timezone}`;
 	}
 
-	// 判断文件类型
-	const isImage = file.file_type?.startsWith('image/');
-	const isAudio = file.file_type?.startsWith('audio/');
-	const isVideo = file.file_type?.startsWith('video/');
-	const isText = file.file_type?.startsWith('text/');
-
 	// 文本内容状态
 	let textContent = $state<string>('');
 	let isLoadingText = $state(false);
 
-	// 下载状态: 'idle' | 'downloading' | 'done' | 'error'
+	// 下载状态
 	let downloadStatus = $state<'idle' | 'downloading' | 'done' | 'error'>('idle');
+
+	// 解密文件名
+	$effect(() => {
+		if (isEncrypted && encryptionKey && file.file_name) {
+			isDecryptingName = true;
+			decryptString(encryptionKey, file.file_name)
+				.then((name) => {
+					decryptedName = name;
+					decryptedType = inferMimeType(name);
+				})
+				.catch(() => {
+					decryptedName = file.file_name;
+					decryptedType = file.file_type;
+				})
+				.finally(() => {
+					isDecryptingName = false;
+				});
+		}
+	});
+
+	// 获取并解密文件内容（用于预览）
+	async function fetchAndDecrypt(): Promise<ArrayBuffer> {
+		const response = await fetch(fileUrl);
+		const data = await response.arrayBuffer();
+		if (isEncrypted && encryptionKey) {
+			return decryptFile(encryptionKey, data);
+		}
+		return data;
+	}
+
+	// 加载预览内容（图片/音视频），解密后创建 blob URL
+	$effect(() => {
+		if (!isEncrypted || !encryptionKey || isDecryptingName) return;
+		if (!isImage && !isAudio && !isVideo) return;
+
+		isDecryptingContent = true;
+		fetchAndDecrypt()
+			.then((decrypted) => {
+				const blob = new Blob([decrypted], { type: displayType || 'application/octet-stream' });
+				decryptedBlobUrl = URL.createObjectURL(blob);
+			})
+			.catch((err) => {
+				console.error('Failed to decrypt content:', err);
+			})
+			.finally(() => {
+				isDecryptingContent = false;
+			});
+
+		return () => {
+			if (decryptedBlobUrl) {
+				URL.revokeObjectURL(decryptedBlobUrl);
+			}
+		};
+	});
 
 	// 加载文本内容
 	async function loadTextContent() {
-		if (!isText || textContent) return;
+		if (textContent) return;
 		isLoadingText = true;
 		try {
-			const resp = await fetch(fileUrl);
-			textContent = await resp.text();
+			if (isEncrypted && encryptionKey) {
+				const decrypted = await fetchAndDecrypt();
+				textContent = new TextDecoder().decode(decrypted);
+			} else {
+				const resp = await fetch(fileUrl);
+				textContent = await resp.text();
+			}
 		} catch (error) {
 			console.error('Failed to load text:', error);
 			textContent = i18n.t('channel.fileItem.loadError');
@@ -110,12 +184,18 @@
 		if (downloadStatus === 'downloading') return;
 		downloadStatus = 'downloading';
 		try {
-			const response = await fetch(fileUrl);
-			const blob = await response.blob();
+			let blob: Blob;
+			if (isEncrypted && encryptionKey) {
+				const decrypted = await fetchAndDecrypt();
+				blob = new Blob([decrypted], { type: displayType || 'application/octet-stream' });
+			} else {
+				const response = await fetch(fileUrl);
+				blob = await response.blob();
+			}
 			const url = window.URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			a.download = file.file_name;
+			a.download = displayName;
 			document.body.appendChild(a);
 			a.click();
 			document.body.removeChild(a);
@@ -135,40 +215,57 @@
 
 	// 如果是文本文件，自动加载内容
 	$effect(() => {
-		if (isText) {
+		if (isText && !isDecryptingName) {
 			loadTextContent();
 		}
 	});
+
+	// 预览用的 URL：加密模式用解密后的 blob URL，否则直接用 CDN URL
+	let previewUrl = $derived(isEncrypted ? decryptedBlobUrl : fileUrl);
 </script>
 
 <div class="file-item">
 	<div class="file-header">
-		<div class="file-icon">{getFileIcon(file.file_type)}</div>
+		<div class="file-icon">
+			{#if isDecryptingName}
+				<span class="decrypting-icon">🔓</span>
+			{:else}
+				{getFileIcon(displayType)}
+			{/if}
+		</div>
 		<div class="file-info">
-			<div class="file-name">{file.file_name}</div>
+			<div class="file-name">
+				{#if isDecryptingName}
+					<span class="decrypting-text">{i18n.t('privacy.decrypting')}</span>
+				{:else}
+					{displayName}
+				{/if}
+			</div>
 			<div class="file-meta">
 				<span class="file-size">{formatFileSize(file.file_size)}</span>
 				<span class="file-time">{formatTime(file.created_at)}</span>
 			</div>
 		</div>
 		<div class="file-actions">
-			<a
-				href={fileUrl}
-				target="_blank"
-				rel="noopener noreferrer"
-				class="icon-button"
-				title={i18n.t('channel.fileItem.open')}
-			>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-					<path
-						d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-						stroke-width="2"
-						stroke-linecap="round"
-					/>
-					<polyline points="15 3 21 3 21 9" stroke-width="2" stroke-linecap="round" />
-					<line x1="10" y1="14" x2="21" y2="3" stroke-width="2" stroke-linecap="round" />
-				</svg>
-			</a>
+			{#if !isEncrypted}
+				<a
+					href={fileUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="icon-button"
+					title={i18n.t('channel.fileItem.open')}
+				>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path
+							d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+							stroke-width="2"
+							stroke-linecap="round"
+						/>
+						<polyline points="15 3 21 3 21 9" stroke-width="2" stroke-linecap="round" />
+						<line x1="10" y1="14" x2="21" y2="3" stroke-width="2" stroke-linecap="round" />
+					</svg>
+				</a>
+			{/if}
 			<button
 				onclick={handleDownload}
 				class="icon-button"
@@ -214,20 +311,32 @@
 
 	<div class="file-content">
 		{#if isImage}
-			<button class="image-preview" onclick={() => onImageClick?.(fileUrl)}>
-				<img src={fileUrl} alt={file.file_name} loading="lazy" />
-				<div class="image-overlay">
-					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-						<circle cx="11" cy="11" r="8" stroke-width="2" />
-						<path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round" />
-						<path d="M11 8v6M8 11h6" stroke-width="2" stroke-linecap="round" />
-					</svg>
-				</div>
-			</button>
+			{#if isEncrypted && isDecryptingContent}
+				<div class="text-loading">{i18n.t('privacy.decrypting')}</div>
+			{:else if previewUrl}
+				<button class="image-preview" onclick={() => onImageClick?.(previewUrl!)}>
+					<img src={previewUrl} alt={displayName} loading="lazy" />
+					<div class="image-overlay">
+						<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+							<circle cx="11" cy="11" r="8" stroke-width="2" />
+							<path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round" />
+							<path d="M11 8v6M8 11h6" stroke-width="2" stroke-linecap="round" />
+						</svg>
+					</div>
+				</button>
+			{/if}
 		{:else if isAudio}
-			<AudioPlayer src={fileUrl} fileName={file.file_name} />
+			{#if isEncrypted && isDecryptingContent}
+				<div class="text-loading">{i18n.t('privacy.decrypting')}</div>
+			{:else if previewUrl}
+				<AudioPlayer src={previewUrl} fileName={displayName} />
+			{/if}
 		{:else if isVideo}
-			<VideoPlayer src={fileUrl} fileName={file.file_name} />
+			{#if isEncrypted && isDecryptingContent}
+				<div class="text-loading">{i18n.t('privacy.decrypting')}</div>
+			{:else if previewUrl}
+				<VideoPlayer src={previewUrl} fileName={displayName} />
+			{/if}
 		{:else if isText}
 			{#if isLoadingText}
 				<div class="text-loading">{i18n.t('channel.fileItem.loading')}</div>
@@ -296,6 +405,15 @@
 		flex-shrink: 0;
 	}
 
+	.decrypting-icon {
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.4; }
+	}
+
 	.file-info {
 		flex: 1;
 		min-width: 0;
@@ -307,6 +425,11 @@
 		color: var(--color-foreground);
 		word-break: break-word;
 		margin-bottom: var(--space-1);
+	}
+
+	.decrypting-text {
+		color: var(--color-muted-foreground);
+		font-style: italic;
 	}
 
 	.file-meta {

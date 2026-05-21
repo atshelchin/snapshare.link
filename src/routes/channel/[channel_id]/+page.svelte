@@ -9,10 +9,39 @@
 	import FileItem from '../../../components/file-item.svelte';
 	import ImageLightbox from '../../../components/image-lightbox.svelte';
 	import { useI18n } from '@shelchin/i18n/svelte';
+	import { importKeyFromBase64Url, encryptFile, encryptString } from '$lib/crypto';
 
 	let { params } = $props();
 	const i18n = useI18n();
 	const channel_id = params.channel_id;
+
+	// 隐私频道：从 URL hash 解析加密密钥和创建者名字
+	let encryptionKey = $state<CryptoKey | null>(null);
+	let channelCreator = $state('');
+	let isPrivacyMode = $derived(encryptionKey !== null);
+
+	$effect(() => {
+		const hash = window.location.hash;
+		if (!hash.includes('key=')) return;
+
+		// Parse key
+		const keyMatch = hash.match(/[#&]key=([^&]+)/);
+		if (keyMatch) {
+			importKeyFromBase64Url(keyMatch[1])
+				.then((key) => {
+					encryptionKey = key;
+				})
+				.catch((err) => {
+					console.error('Failed to parse encryption key from URL:', err);
+				});
+		}
+
+		// Parse creator name
+		const byMatch = hash.match(/[#&]by=([^&]+)/);
+		if (byMatch) {
+			channelCreator = decodeURIComponent(byMatch[1]);
+		}
+	});
 
 	// Tab 状态
 	let activeTab = $state<'file' | 'text'>('file');
@@ -60,13 +89,10 @@
 				const data = JSON.parse(event.data);
 
 				if (data.type === 'initial') {
-					// 首次加载
 					filesList = data.data || [];
 					isLoadingFiles = false;
 				} else if (data.type === 'update') {
-					// 增量更新
 					const newFiles = data.data || [];
-					// 合并新文件到列表开头，避免重复
 					const existingKeys = new Set(filesList.map((f) => f.file_key));
 					const uniqueNewFiles = newFiles.filter((f: FileItem) => !existingKeys.has(f.file_key));
 					filesList = [...uniqueNewFiles, ...filesList];
@@ -86,7 +112,6 @@
 		};
 
 		return () => {
-			// 清理 SSE 连接
 			if (eventSource) {
 				eventSource.close();
 			}
@@ -113,7 +138,6 @@
 			selectedFiles = [...selectedFiles, ...result.valid.map((file) => ({ file }))];
 		}
 
-		// 检查总文件数是否超过限制
 		const currentValidFiles = selectedFiles.filter((f) => !f.error);
 		if (currentValidFiles.length > 10) {
 			const toDelete = currentValidFiles.length - 10;
@@ -121,16 +145,13 @@
 		}
 	}
 
-	// 处理文件选择
 	function handleFileSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
 		if (!input.files || input.files.length === 0) return;
 		addFiles(input.files);
-		// 清空 input 以允许重复选择同一文件
 		input.value = '';
 	}
 
-	// 拖拽处理
 	function handleDragOver(event: DragEvent) {
 		event.preventDefault();
 		isDragOver = true;
@@ -151,32 +172,41 @@
 		}
 	}
 
-	// 移除文件
 	function removeFile(index: number) {
 		selectedFiles = selectedFiles.filter((_, i) => i !== index);
 
-		// 重新检查文件数量限制
 		const currentValidFiles = selectedFiles.filter((f) => !f.error);
 		if (currentValidFiles.length > 10) {
 			const toDelete = currentValidFiles.length - 10;
 			validationError = `${i18n.t('channel.upload.maxFiles')} ${currentValidFiles.length} ${i18n.t('channel.upload.filesSelected')}, ${i18n.t('channel.upload.pleaseDelete')} ${toDelete} ${i18n.t('channel.upload.files')}`;
 		} else {
-			// 当文件数量 <= 10 时，重新验证所有文件
 			validationError = '';
 			const files = selectedFiles.map((f) => f.file);
 			const result = validateFiles(files);
 
-			// 更新文件列表，重新标记错误
 			selectedFiles = [
 				...result.valid.map((file) => ({ file })),
 				...result.invalid.map((item) => ({ file: item.file, error: item.error }))
 			];
 
-			// 如果有无效文件，显示第一个错误
 			if (result.invalid.length > 0 && result.valid.length === 0) {
 				validationError = result.invalid[0].error;
 			}
 		}
+	}
+
+	// 加密单个文件（隐私模式）
+	async function encryptFileForUpload(
+		key: CryptoKey,
+		file: File
+	): Promise<{ encryptedFile: File; encryptedName: string }> {
+		const data = await file.arrayBuffer();
+		const encrypted = await encryptFile(key, data);
+		const encryptedName = await encryptString(key, file.name);
+		const encryptedFile = new File([encrypted], encryptedName, {
+			type: 'application/octet-stream'
+		});
+		return { encryptedFile, encryptedName };
 	}
 
 	// 分享文件
@@ -187,7 +217,7 @@
 		isUploading = true;
 		rateLimitError = '';
 
-		// 初始化上传队列
+		// 初始化上传队列（显示原始文件名给用户看）
 		uploadQueue = validFiles.map((file) => ({
 			file,
 			status: 'waiting' as const,
@@ -195,12 +225,28 @@
 		}));
 
 		try {
-			// 请求上传 URLs
-			const fileSizes = validFiles.map((f) => f.size);
+			// 隐私模式：加密所有文件
+			let filesToUpload: File[];
+			let encryptedNames: string[];
+
+			if (isPrivacyMode && encryptionKey) {
+				uploadQueue.forEach((_, i) => {
+					uploadQueue[i].status = 'waiting';
+				});
+				const encrypted = await Promise.all(
+					validFiles.map((f) => encryptFileForUpload(encryptionKey!, f))
+				);
+				filesToUpload = encrypted.map((e) => e.encryptedFile);
+				encryptedNames = encrypted.map((e) => e.encryptedName);
+			} else {
+				filesToUpload = validFiles;
+				encryptedNames = validFiles.map((f) => f.name);
+			}
+
+			const fileSizes = filesToUpload.map((f) => f.size);
 			const urlsData = await genUploadUrls(fileSizes);
 
 			if (!urlsData.success) {
-				// 处理限流错误
 				if (urlsData.limit) {
 					const limit = urlsData.limit.hour || urlsData.limit.day;
 					const currentMB = Math.round(limit.current / 1024 / 1024);
@@ -214,9 +260,15 @@
 				return;
 			}
 
-			// 开始上传每个文件
-			const uploadPromises = validFiles.map((file, index) =>
-				uploadSingleFile(file, urlsData.data[index], index)
+			const uploadPromises = filesToUpload.map((file, index) =>
+				uploadSingleFile(
+					file,
+					urlsData.data[index],
+					index,
+					encryptedNames[index],
+					isPrivacyMode ? 'application/octet-stream' : validFiles[index].type,
+					isPrivacyMode ? filesToUpload[index].size : validFiles[index].size
+				)
 			);
 
 			await Promise.all(uploadPromises);
@@ -225,7 +277,6 @@
 			rateLimitError = i18n.t('channel.upload.uploadError');
 		} finally {
 			isUploading = false;
-			// 清空选择
 			setTimeout(() => {
 				selectedFiles = [];
 				uploadQueue = [];
@@ -238,10 +289,12 @@
 	async function uploadSingleFile(
 		file: File,
 		uploadData: { url: string; fileKey: string },
-		index: number
+		index: number,
+		fileName: string,
+		fileType: string,
+		fileSize: number
 	) {
 		return new Promise<void>((resolve, reject) => {
-			// 更新状态为上传中
 			uploadQueue[index].status = 'uploading';
 
 			const onload = async (xhr: XMLHttpRequest) => {
@@ -249,17 +302,15 @@
 					uploadQueue[index].status = 'success';
 					uploadQueue[index].progress = 100;
 
-					// 添加到文件列表
 					try {
-						await addFile(channel_id, uploadData.fileKey, file.name);
-						// 本地更新文件列表
+						await addFile(channel_id, uploadData.fileKey, fileName);
 						filesList = [
 							{
 								channel_id,
 								file_key: uploadData.fileKey,
-								file_name: file.name,
-								file_type: file.type,
-								file_size: file.size,
+								file_name: fileName,
+								file_type: fileType,
+								file_size: fileSize,
 								created_at: Date.now()
 							},
 							...filesList
@@ -306,8 +357,20 @@
 		rateLimitError = '';
 
 		try {
-			const file = textToFile(txt, `text_${Date.now()}.txt`);
-			const urlsData = await genUploadUrls([file.size]);
+			let fileToUpload: File;
+			let fileNameToStore: string;
+
+			if (isPrivacyMode && encryptionKey) {
+				const originalFile = textToFile(txt, `text_${Date.now()}.txt`);
+				const result = await encryptFileForUpload(encryptionKey, originalFile);
+				fileToUpload = result.encryptedFile;
+				fileNameToStore = result.encryptedName;
+			} else {
+				fileToUpload = textToFile(txt, `text_${Date.now()}.txt`);
+				fileNameToStore = fileToUpload.name;
+			}
+
+			const urlsData = await genUploadUrls([fileToUpload.size]);
 
 			if (!urlsData.success) {
 				if (urlsData.limit) {
@@ -326,16 +389,15 @@
 				const onload = async (xhr: XMLHttpRequest) => {
 					if (xhr.status >= 200 && xhr.status < 300) {
 						textUploadProgress = 100;
-						await addFile(channel_id, urlsData.data[0].fileKey, file.name);
+						await addFile(channel_id, urlsData.data[0].fileKey, fileNameToStore);
 
-						// 本地更新文件列表
 						filesList = [
 							{
 								channel_id,
 								file_key: urlsData.data[0].fileKey,
-								file_name: file.name,
-								file_type: file.type,
-								file_size: file.size,
+								file_name: fileNameToStore,
+								file_type: isPrivacyMode ? 'application/octet-stream' : 'text/plain',
+								file_size: fileToUpload.size,
 								created_at: Date.now()
 							},
 							...filesList
@@ -357,7 +419,7 @@
 
 				uploadWithPUT(
 					urlsData.data[0].url,
-					file,
+					fileToUpload,
 					onload,
 					onprogress,
 					() => {
@@ -381,9 +443,23 @@
 	}
 </script>
 
-<ChannelHeader {channel_id} />
+<ChannelHeader {channel_id} {encryptionKey} {isPrivacyMode} />
 
 <DangerNotice emojiIcon="⏰" description={i18n.t('channel.notice.description')} />
+
+{#if isPrivacyMode}
+	<div class="privacy-badge">
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+			<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+		</svg>
+		<span>{i18n.t('privacy.badge')}</span>
+		<span class="privacy-badge-sub">· {i18n.t('privacy.encrypted')}</span>
+		{#if channelCreator}
+			<span class="privacy-badge-creator">· {channelCreator}</span>
+		{/if}
+	</div>
+{/if}
 
 {#if rateLimitError}
 	<div class="rate-limit-error">
@@ -428,7 +504,7 @@
 							disabled={isUploading}
 						/>
 						<label for="fileInput" class="file-input-label">
-							<div class="upload-icon">📤</div>
+							<div class="upload-icon">{isPrivacyMode ? '🔒' : '📤'}</div>
 							<div class="upload-text">
 								<div class="upload-title">{i18n.t('channel.upload.clickOrDrag')}</div>
 								<div class="upload-hint">
@@ -436,6 +512,9 @@
 										'channel.upload.maxSize'
 									)} 100MB
 								</div>
+								{#if isPrivacyMode}
+									<div class="upload-hint privacy-hint">{i18n.t('privacy.encrypted')}</div>
+								{/if}
 							</div>
 						</label>
 					</div>
@@ -466,6 +545,12 @@
 								isUploading ||
 								selectedFiles.filter((f) => !f.error).length > 10}
 						>
+							{#if isPrivacyMode}
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+									<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+									<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+								</svg>
+							{/if}
 							{isUploading
 								? i18n.t('channel.upload.uploading')
 								: `${i18n.t('channel.upload.upload')} (${selectedFiles.filter((f) => !f.error).length})`}
@@ -514,7 +599,7 @@
 	{:else if filesList.length > 0}
 		<div class="files-grid">
 			{#each filesList as file (file.file_key)}
-				<FileItem {file} onImageClick={(url) => (lightboxImageUrl = url)} />
+				<FileItem {file} {encryptionKey} onImageClick={(url) => (lightboxImageUrl = url)} />
 			{/each}
 		</div>
 	{:else}
@@ -525,6 +610,36 @@
 <ImageLightbox bind:imageUrl={lightboxImageUrl} />
 
 <style>
+	.privacy-badge {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-4);
+		background: hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.1);
+		border: 1px solid hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-primary);
+		font-size: var(--text-sm);
+		font-weight: var(--font-semibold);
+	}
+
+	.privacy-badge-sub {
+		font-weight: var(--font-normal);
+		opacity: 0.7;
+	}
+
+	.privacy-badge-creator {
+		font-weight: var(--font-medium);
+		opacity: 0.85;
+	}
+
+	.privacy-hint {
+		color: var(--color-primary);
+		font-weight: var(--font-medium);
+		margin-top: var(--space-1);
+	}
+
 	.rate-limit-error {
 		display: flex;
 		align-items: center;

@@ -6,10 +6,29 @@
 	import Modal from './modal.svelte';
 	import CopyButton from './copy-button.svelte';
 	import QRCode from './qr-code.svelte';
+	import { exportKeyToBase64Url } from '$lib/crypto';
 
 	const i18n = useI18n();
-	let { channel_id } = $props();
+	let { channel_id, encryptionKey = null, isPrivacyMode = false } = $props<{
+		channel_id: string;
+		encryptionKey?: CryptoKey | null;
+		isPrivacyMode?: boolean;
+	}>();
 	let basicModal = $state(false);
+
+	// 生成包含密钥的完整 URL
+	let shareUrl = $state(`https://snapshare.link/channel/${channel_id}`);
+
+	$effect(() => {
+		if (isPrivacyMode && encryptionKey) {
+			exportKeyToBase64Url(encryptionKey).then((keyStr) => {
+				shareUrl = `https://snapshare.link/channel/${channel_id}#key=${keyStr}`;
+			});
+		} else {
+			shareUrl = `https://snapshare.link/channel/${channel_id}`;
+		}
+	});
+
 	const leave = () => {
 		goto(resolve('/'));
 	};
@@ -20,7 +39,15 @@
 		<div style="font-size: 12px; color: #666; margin-bottom: 5px;" data-lang="currentchannel">
 			{i18n.t('app.channel.headertitle')}
 		</div>
-		<div class="channel-code" id="currentchannel">{channel_id}</div>
+		<div class="channel-code">
+			{#if isPrivacyMode}
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; vertical-align: middle; margin-right: 4px;">
+					<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+					<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+				</svg>
+			{/if}
+			{channel_id}
+		</div>
 	</div>
 	<div class="channel-actions">
 		<button
@@ -45,14 +72,14 @@
 			>
 		</h3>
 		<div id="qrcode">
-			<QRCode data={`https://snapshare.link/channel/${channel_id}`} size={160} />
+			<QRCode data={shareUrl} size={160} />
 		</div>
 		<div class="qr-url" id="qrUrl">
-			https://snapshare.link/channel/{channel_id}
+			{shareUrl}
 		</div>
 		<CopyButton
 			label={i18n.t('app.channel.copylink')}
-			value={`https://snapshare.link/channel/${channel_id}`}
+			value={shareUrl}
 		/>
 	</div>
 </Modal>
@@ -95,6 +122,8 @@
 		font-size: 24px;
 		font-weight: bold;
 		color: var(--brand-600);
+		display: flex;
+		align-items: center;
 	}
 
 	.channel-code-section {
@@ -132,16 +161,12 @@
 		font-weight: 600;
 	}
 	.qr-content {
-		/* background: white; */
-
 		border-radius: 20px;
 		text-align: center;
-
 		width: 100%;
 	}
 	.qr-content h3 {
 		margin-bottom: 20px;
-		/* color: #333; */
 		display: flex;
 		justify-content: center;
 		align-items: center;
