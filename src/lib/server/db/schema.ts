@@ -21,3 +21,29 @@ export const files = sqliteTable(
 		index('created_at_idx').on(table.created_at)
 	]
 );
+
+// 付费存储文件（Data Vault - 30天，任意大小）
+export const paidFiles = sqliteTable(
+	'paid_files',
+	{
+		file_key: text().primaryKey(),
+		channel_id: text().notNull(),
+		file_name: text().notNull(),
+		file_size: integer().notNull(), // 原始文件大小（字节）
+		encrypted: integer().notNull().default(0), // 0=明文 1=加密
+		payment_tx: text(), // 链上交易哈希
+		payment_amount: text(), // 支付金额 (USDC, 如 "4.50")
+		upload_id: text(), // R2 multipart upload ID
+		upload_status: text().notNull().default('pending'), // pending | uploading | completed | failed
+		parts_total: integer().default(0),
+		parts_done: integer().default(0),
+		uploader_hash_ip: text(),
+		expires_at: integer().notNull(), // 30天后的时间戳
+		created_at: integer().notNull()
+	},
+	(table) => [
+		index('paid_channel_id_idx').on(table.channel_id),
+		index('paid_upload_status_idx').on(table.upload_status),
+		index('paid_expires_at_idx').on(table.expires_at)
+	]
+);

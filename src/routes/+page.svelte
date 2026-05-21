@@ -111,6 +111,14 @@
 		</button>
 	</div>
 
+	<div class="vault-entry">
+		<a href="/vault" class="button-vault button">
+			<span>📦</span>
+			<span>{i18n.t('vault.title')}</span>
+			<span class="vault-entry-sub">{i18n.t('vault.subtitle')}</span>
+		</a>
+	</div>
+
 	{#if showRegister}
 		<div class="register-card">
 			<h4 class="register-title">{i18n.t('privacy.registerFirst')}</h4>
@@ -250,15 +258,46 @@
 		font-size: var(--text-sm);
 	}
 
+	/* Vault entry */
+	.vault-entry {
+		margin-top: var(--space-6);
+		padding-top: var(--space-6);
+		border-top: 1px solid var(--color-border);
+	}
+
+	.button-vault {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-1);
+		width: 100%;
+		padding: var(--space-4);
+		background: var(--color-panel-1);
+		border: 2px solid var(--color-border);
+		border-radius: 10px;
+		color: var(--color-foreground);
+		text-decoration: none;
+		transition: all 0.2s ease;
+		font-weight: 600;
+	}
+
+	.button-vault:hover {
+		border-color: var(--brand-400);
+		background: var(--color-panel-2);
+	}
+
+	.vault-entry-sub {
+		font-size: var(--text-xs);
+		font-weight: var(--font-normal);
+		color: var(--color-muted-foreground);
+	}
+
 	.tips {
-		margin-top: 60px;
+		margin-top: 40px;
 	}
 	@media (max-width: 768px) {
 		.room-input-group {
 			margin-top: 100px;
-		}
-		.tips {
-			margin-top: 40px;
 		}
 	}
 </style>

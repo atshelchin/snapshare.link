@@ -8,6 +8,7 @@
 		"build": "vite build",
 		"preview": "pnpm run build && wrangler dev --ip 0.0.0.0",
 		"deploy": "pnpm run build && wrangler deploy",
+		"deploy:cleanup": "cd workers/cleanup && wrangler deploy",
 		"cf-typegen": "wrangler types src/worker-configuration.d.ts",
 		"build:pack": "vite build && pnpm run prepack",
 		"prepare": "svelte-kit sync || echo ''",
@@ -57,6 +58,8 @@
 		"@aws-sdk/client-s3": "^3.914.0",
 		"@aws-sdk/s3-request-presigner": "^3.914.0",
 		"@lucide/svelte": "^0.546.0",
+		"@noble/curves": "^2.2.0",
+		"@noble/hashes": "^2.2.0",
 		"@shelchin/i18n": "0.0.3-dev.20251016115159.4e313f3",
 		"nanoid": "^5.1.6",
 		"qr-code-styling": "^1.9.2"

@@ -51,7 +51,7 @@ export async function registerPasskey(
 	const spkiPublicKey = attestationResponse.getPublicKey?.();
 	if (spkiPublicKey) {
 		// Strip SPKI header (26 bytes for P-256) to get raw 65-byte uncompressed key (04 + X + Y)
-		const rawPublicKey = new Uint8Array(spkiPublicKey).slice(26);
+		const rawPublicKey = new Uint8Array(spkiPublicKey).slice(26).buffer;
 		const resp = await fetch(`${PUBLICKEY_INDEX_URL}/api/create`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

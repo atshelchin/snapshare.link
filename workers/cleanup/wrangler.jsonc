@@ -1,0 +1,15 @@
+{
+	"name": "snapshare-cleanup",
+	"main": "index.ts",
+	"compatibility_date": "2025-08-05",
+	"compatibility_flags": ["nodejs_compat"],
+	"triggers": {
+		"crons": ["* * * * *"]
+	}
+	// Deploy:
+	//   cd workers/cleanup && wrangler deploy
+	//
+	// Set secrets:
+	//   wrangler secret put CLEANUP_SECRET
+	//   wrangler secret put CLEANUP_URL  (optional, defaults to https://snapshare.link/api/cleanup)
+}

@@ -1,0 +1,414 @@
+<script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { useI18n } from '@shelchin/i18n/svelte';
+	import VaultUploader from '../../components/vault-uploader.svelte';
+	import {
+		isWebAuthnSupported,
+		registerPasskey,
+		authenticateAndDeriveKey,
+		getPasskeyDisplayName
+	} from '$lib/passkeys';
+	import { exportKeyToBase64Url, importKeyFromBase64Url } from '$lib/crypto';
+
+	const i18n = useI18n();
+
+	// Auth state
+	let isAuthenticated = $state(false);
+	let isAuthenticating = $state(false);
+	let authError = $state('');
+	let userName = $state('');
+	let encryptionKey = $state<CryptoKey | null>(null);
+	let vaultChannelId = $state('');
+
+	// Registration
+	let showRegister = $state(false);
+	let registerName = $state('');
+
+	// Use a fixed salt for vault so PRF always produces the same key per user
+	const VAULT_SALT = 'snapshare-vault';
+	const SESSION_KEY = 'vault-session';
+
+	// Restore session on mount
+	$effect(() => {
+		const saved = sessionStorage.getItem(SESSION_KEY);
+		if (saved) {
+			try {
+				const session = JSON.parse(saved);
+				importKeyFromBase64Url(session.key).then((key) => {
+					encryptionKey = key;
+					vaultChannelId = session.channelId;
+					userName = session.userName;
+					isAuthenticated = true;
+				});
+			} catch {
+				sessionStorage.removeItem(SESSION_KEY);
+			}
+		}
+	});
+
+	async function saveSession(key: CryptoKey, channelId: string, name: string) {
+		const keyStr = await exportKeyToBase64Url(key);
+		sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+			key: keyStr,
+			channelId,
+			userName: name
+		}));
+	}
+
+	function logout() {
+		sessionStorage.removeItem(SESSION_KEY);
+		encryptionKey = null;
+		vaultChannelId = '';
+		userName = '';
+		isAuthenticated = false;
+		showRegister = false;
+		authError = '';
+	}
+
+	async function authenticate() {
+		if (!isWebAuthnSupported()) {
+			authError = i18n.t('privacy.webauthnNotSupported');
+			return;
+		}
+
+		isAuthenticating = true;
+		authError = '';
+
+		try {
+			const { key, credentialId } = await authenticateAndDeriveKey(VAULT_SALT);
+			encryptionKey = key;
+			// Use credential ID hash as vault channel ID
+			const keyStr = await exportKeyToBase64Url(key);
+			vaultChannelId = 'vault-' + keyStr.slice(0, 16);
+			const name = await getPasskeyDisplayName(credentialId);
+			userName = name || credentialId.slice(0, 12) + '...';
+			isAuthenticated = true;
+			await saveSession(key, vaultChannelId, userName);
+		} catch (e: unknown) {
+			const error = e as Error;
+			if (error.message === 'PRF_NOT_SUPPORTED') {
+				authError = i18n.t('privacy.prfNotSupported');
+			} else {
+				showRegister = true;
+			}
+		} finally {
+			isAuthenticating = false;
+		}
+	}
+
+	async function handleRegister() {
+		if (!registerName.trim()) return;
+
+		isAuthenticating = true;
+		authError = '';
+
+		try {
+			await registerPasskey(registerName.trim());
+			showRegister = false;
+			const { key, credentialId } = await authenticateAndDeriveKey(VAULT_SALT);
+			encryptionKey = key;
+			const keyStr = await exportKeyToBase64Url(key);
+			vaultChannelId = 'vault-' + keyStr.slice(0, 16);
+			userName = registerName.trim();
+			isAuthenticated = true;
+			await saveSession(key, vaultChannelId, userName);
+		} catch (regError: unknown) {
+			const re = regError as Error;
+			if (re.message === 'PRF_NOT_SUPPORTED') {
+				authError = i18n.t('privacy.prfNotSupported');
+			} else if (re.message?.startsWith('PUBLICKEY_STORE_FAILED')) {
+				authError = re.message;
+			} else {
+				authError = i18n.t('privacy.authFailed');
+			}
+		} finally {
+			isAuthenticating = false;
+		}
+	}
+
+	function goHome() {
+		goto(resolve('/'));
+	}
+</script>
+
+{#if isAuthenticated && encryptionKey}
+	<!-- Authenticated vault view -->
+	<div class="vault-page">
+		<div class="vault-header">
+			<div class="vault-header-left">
+				<h1 class="vault-title">📦 {i18n.t('vault.title')}</h1>
+				{#if userName}
+					<span class="vault-user">{userName}</span>
+				{/if}
+			</div>
+			<div class="vault-header-actions">
+				<button class="btn btn-secondary btn-small" onclick={logout}>
+					{i18n.t('vault.switchAccount')}
+				</button>
+				<button class="btn btn-secondary btn-small" onclick={goHome}>
+					{i18n.t('app.channel.leave')}
+				</button>
+			</div>
+		</div>
+
+		<div class="vault-notice">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+				<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+			</svg>
+			<span>{i18n.t('privacy.encrypted')}</span>
+		</div>
+
+		<div class="vault-content">
+			<VaultUploader channelId={vaultChannelId} {encryptionKey} />
+		</div>
+	</div>
+{:else}
+	<!-- Auth screen -->
+	<div class="vault-auth">
+		<div class="vault-auth-card">
+			<div class="vault-auth-icon">📦</div>
+			<h1 class="vault-auth-title">{i18n.t('vault.title')}</h1>
+			<p class="vault-auth-subtitle">{i18n.t('vault.subtitle')}</p>
+
+			{#if showRegister}
+				<div class="register-section">
+					<h4 class="register-title">{i18n.t('privacy.registerFirst')}</h4>
+					<input
+						bind:value={registerName}
+						type="text"
+						class="register-input"
+						placeholder={i18n.t('privacy.enterName')}
+						autocomplete="off"
+					/>
+					<div class="register-actions">
+						<button
+							class="button button-primary"
+							onclick={handleRegister}
+							disabled={!registerName.trim() || isAuthenticating}
+						>
+							{isAuthenticating ? i18n.t('privacy.registering') : i18n.t('privacy.register')}
+						</button>
+						<button class="button button-cancel" onclick={() => (showRegister = false)}>
+							{i18n.t('modal.close')}
+						</button>
+					</div>
+				</div>
+			{:else}
+				<button
+					class="button button-primary vault-auth-btn"
+					onclick={authenticate}
+					disabled={isAuthenticating}
+				>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+						<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+					</svg>
+					<span>
+						{isAuthenticating ? i18n.t('privacy.authenticating') : i18n.t('vault.loginWithPasskey')}
+					</span>
+				</button>
+			{/if}
+
+			{#if authError}
+				<div class="vault-auth-error">{authError}</div>
+			{/if}
+
+			<button class="vault-back-link" onclick={goHome}>
+				← {i18n.t('app.channel.leave')}
+			</button>
+		</div>
+	</div>
+{/if}
+
+<style>
+	/* Vault page (authenticated) */
+	.vault-page {
+		max-width: 640px;
+		margin: 0 auto;
+	}
+
+	.vault-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--space-6);
+		padding: var(--space-4);
+		background: var(--item-bg);
+		border-radius: var(--radius-lg);
+	}
+
+	.vault-header-left {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+
+	.vault-header-actions {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.vault-title {
+		font-size: var(--text-xl);
+		font-weight: var(--font-semibold);
+		color: var(--color-foreground);
+		margin: 0;
+	}
+
+	.vault-user {
+		font-size: var(--text-sm);
+		color: var(--color-muted-foreground);
+		background: var(--color-panel-2);
+		padding: var(--space-1) var(--space-3);
+		border-radius: var(--radius-full);
+	}
+
+	.vault-notice {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-4);
+		background: hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.1);
+		border: 1px solid hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-primary);
+		font-size: var(--text-sm);
+		font-weight: var(--font-medium);
+	}
+
+	.vault-content {
+		padding: var(--space-6);
+		background: var(--color-panel-1);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+	}
+
+	/* Auth screen */
+	.vault-auth {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 60vh;
+	}
+
+	.vault-auth-card {
+		text-align: center;
+		max-width: 400px;
+		width: 100%;
+		padding: var(--space-8);
+		background: var(--color-panel-1);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+	}
+
+	.vault-auth-icon {
+		font-size: 4rem;
+		margin-bottom: var(--space-3);
+	}
+
+	.vault-auth-title {
+		font-size: var(--text-2xl);
+		font-weight: var(--font-semibold);
+		color: var(--color-foreground);
+		margin: 0 0 var(--space-2) 0;
+	}
+
+	.vault-auth-subtitle {
+		font-size: var(--text-sm);
+		color: var(--color-muted-foreground);
+		margin: 0 0 var(--space-6) 0;
+	}
+
+	.vault-auth-btn {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+		padding: var(--space-4);
+		font-size: var(--text-base);
+	}
+
+	.vault-auth-error {
+		margin-top: var(--space-3);
+		padding: var(--space-3);
+		background: hsla(0, 70%, 50%, 0.1);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-md);
+		color: var(--color-danger);
+		font-size: var(--text-sm);
+	}
+
+	.vault-back-link {
+		display: block;
+		margin-top: var(--space-4);
+		background: none;
+		border: none;
+		color: var(--color-muted-foreground);
+		cursor: pointer;
+		font-size: var(--text-sm);
+	}
+
+	.vault-back-link:hover {
+		color: var(--color-primary);
+	}
+
+	/* Register */
+	.register-section {
+		text-align: left;
+	}
+
+	.register-title {
+		margin: 0 0 var(--space-3) 0;
+		font-size: var(--text-base);
+		font-weight: var(--font-semibold);
+		color: var(--color-foreground);
+	}
+
+	.register-input {
+		width: 100%;
+		padding: 10px 14px;
+		font-size: var(--text-base);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-panel-2);
+		color: var(--color-foreground);
+		margin-bottom: var(--space-3);
+	}
+
+	.register-input:focus {
+		outline: none;
+		border-color: var(--brand-400);
+	}
+
+	.register-actions {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.button-cancel {
+		background: var(--color-panel-2);
+		color: var(--color-muted-foreground);
+		border: 1px solid var(--color-border);
+	}
+
+	.btn.btn-secondary {
+		background: #e0e0e0;
+		color: #333;
+		padding: 8px 16px;
+		font-size: 13px;
+		border: none;
+		border-radius: 10px;
+		cursor: pointer;
+		font-weight: 600;
+	}
+
+	.btn.btn-small {
+		padding: 8px 16px;
+		font-size: 13px;
+	}
+</style>
