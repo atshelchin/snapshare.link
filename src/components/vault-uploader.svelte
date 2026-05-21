@@ -519,7 +519,7 @@
 			<h3 class="payment-title">{i18n.t('vault.scanToPay')}</h3>
 
 			<div class="payment-qr">
-				<QRCode data={paymentAddress} size={180} />
+				<QRCode data={paymentAddress} size={120} />
 			</div>
 
 			<div class="payment-details">

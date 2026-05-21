@@ -211,12 +211,31 @@
 
 	async function handleDownload(file: VaultFile) {
 		if (!encryptionKey || downloadingFile) return;
-		// If we already have a valid token for this file, go straight to download
+
+		// Check memory token
 		if (downloadToken && downloadPayingFile?.fileKey === file.fileKey) {
-			await startDownloadWithToken(file, downloadToken);
+			await copyDownloadCommand(file);
 			return;
 		}
-		// Start payment flow
+
+		// Check server for existing valid token
+		try {
+			const tokenResp = await fetch('/api/vault/check-download-token', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ fileKey: file.fileKey })
+			});
+			const tokenData = await tokenResp.json() as { success: boolean; data?: { hasToken: boolean; token?: string } };
+			if (tokenData.success && tokenData.data?.hasToken && tokenData.data.token) {
+				downloadToken = tokenData.data.token;
+				downloadPayingFile = file;
+				cliModalFile = file;
+				await copyDownloadCommand(file);
+				return;
+			}
+		} catch { /* no existing token, proceed to payment */ }
+
+		// No valid token — start payment flow
 		downloadPayingFile = file;
 		try {
 			const resp = await fetch('/api/vault/create-download-order', {

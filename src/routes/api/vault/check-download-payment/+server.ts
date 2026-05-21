@@ -1,10 +1,11 @@
 import type { RequestHandler } from './$types';
 import { nanoid } from 'nanoid';
 import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
 import { downloadTokens } from '$lib/server/db/schema';
 import { checkPaymentToAddress } from '$lib/payment';
 
-// Check download payment and issue a download token (24h, max 3 downloads)
+// Check download payment and activate the download token
 export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
 		const db = drizzle(platform?.env!.DB);
@@ -15,12 +16,26 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return Response.json({ success: false, error: 'Missing orderId' }, { status: 400 });
 		}
 
+		// Try KV first, then fallback to D1 pending token
+		let order: { fileKey: string; paymentAddress: string; amount: string; privateKeyHex: string };
 		const orderData = await env.KV.get(`download-order:${orderId}`);
-		if (!orderData) {
-			return Response.json({ success: false, error: 'Order not found or expired' }, { status: 404 });
+		if (orderData) {
+			order = JSON.parse(orderData);
+		} else {
+			// KV expired — recover from D1 pending token
+			const pending = await db.select().from(downloadTokens)
+				.where(eq(downloadTokens.token, orderId)).limit(1).all();
+			if (!pending.length) {
+				return Response.json({ success: false, error: 'Order not found' }, { status: 404 });
+			}
+			order = {
+				fileKey: pending[0].file_key,
+				paymentAddress: pending[0].payment_address || '',
+				amount: pending[0].payment_amount || '0',
+				privateKeyHex: pending[0].private_key || ''
+			};
 		}
 
-		const order = JSON.parse(orderData);
 		const result = await checkPaymentToAddress(order.paymentAddress, order.amount);
 
 		if (!result.paid) {
@@ -30,10 +45,14 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			});
 		}
 
-		// Payment confirmed — create download token
+		// Payment confirmed — activate token (replace pending with real token)
 		const token = nanoid(32);
 		const now = Date.now();
 
+		// Delete the pending token record
+		await db.delete(downloadTokens).where(eq(downloadTokens.token, orderId));
+
+		// Insert activated token
 		await db.insert(downloadTokens).values({
 			token,
 			file_key: order.fileKey,
@@ -43,7 +62,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			payment_amount: order.amount,
 			downloads_used: 0,
 			downloads_max: 3,
-			expires_at: now + 24 * 60 * 60 * 1000, // 24h
+			expires_at: now + 24 * 60 * 60 * 1000,
 			created_at: now
 		});
 
