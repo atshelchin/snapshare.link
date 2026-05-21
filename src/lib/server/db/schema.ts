@@ -65,7 +65,7 @@ export const downloadTokens = sqliteTable(
 		private_key: text(), // 收款私钥
 		payment_amount: text(), // 支付金额
 		downloads_used: integer().notNull().default(0),
-		downloads_max: integer().notNull().default(3), // 最多下载次数
+		downloads_max: integer().notNull().default(10), // 最多下载次数
 		expires_at: integer().notNull(), // 24h 后过期
 		created_at: integer().notNull()
 	},

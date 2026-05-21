@@ -64,6 +64,7 @@
 	let fileKey = $state('');
 	let partsTotal = $state(0);
 	let partsDone = $state(0);
+	let currentPartProgress = $state(0); // 0-100 within current part
 	let isPaused = $state(false);
 	let abortController = $state<AbortController | null>(null);
 
@@ -71,7 +72,7 @@
 	let uploadStatsTimer = $state<ReturnType<typeof setInterval> | null>(null);
 
 	let overallProgress = $derived(
-		partsTotal > 0 ? (partsDone / partsTotal) * 100 : 0
+		partsTotal > 0 ? ((partsDone + currentPartProgress / 100) / partsTotal) * 100 : 0
 	);
 
 	let uploadSpeedStr = $state('');
@@ -382,6 +383,7 @@
 
 			if (success) {
 				partsDone++;
+				currentPartProgress = 0;
 				error = '';
 				updateUploadStats();
 				saveUploadState();
@@ -438,7 +440,9 @@
 			abortController = ctrl;
 			const xhr = new XMLHttpRequest();
 			xhr.open('PUT', urlData.data.url);
-			xhr.upload.addEventListener('progress', () => {});
+			xhr.upload.addEventListener('progress', (e) => {
+				if (e.lengthComputable) currentPartProgress = (e.loaded / e.total) * 100;
+			});
 			xhr.addEventListener('load', () => {
 				if (xhr.status >= 200 && xhr.status < 300) resolve();
 				else reject(new Error(`HTTP ${xhr.status}`));
@@ -630,11 +634,13 @@
 		<div class="plan-selector">
 			<button class="plan-option" class:active={selectedPlan === '7d'} onclick={() => switchPlan('7d')}>
 				<span class="plan-days">7 {i18n.t('vault.days')}</span>
-				<span class="plan-price">$0.01/GB</span>
+				<span class="plan-price">{i18n.t('vault.uploadPrice')}: $0.01/GB</span>
+				<span class="plan-price plan-price-download">{i18n.t('vault.downloadPriceLabel')}: $0.001/GB ({i18n.t('vault.downloadMinPrice')})</span>
 			</button>
 			<button class="plan-option" class:active={selectedPlan === '30d'} onclick={() => switchPlan('30d')}>
 				<span class="plan-days">30 {i18n.t('vault.days')}</span>
-				<span class="plan-price">$0.1/GB</span>
+				<span class="plan-price">{i18n.t('vault.uploadPrice')}: $0.1/GB</span>
+				<span class="plan-price plan-price-download">{i18n.t('vault.downloadPriceLabel')}: $0.01/GB ({i18n.t('vault.downloadMinPrice')})</span>
 			</button>
 		</div>
 
@@ -709,6 +715,7 @@
 	.plan-option:hover:not(.active) { border-color: var(--color-muted-foreground); }
 	.plan-days { display: block; font-size: var(--text-lg); font-weight: var(--font-semibold); color: var(--color-foreground); }
 	.plan-price { display: block; font-size: var(--text-sm); color: var(--color-primary); margin-top: var(--space-1); }
+	.plan-price-download { color: var(--color-muted-foreground); font-size: var(--text-xs); margin-top: 2px; }
 
 	.vault-dropzone-label {
 		display: flex; flex-direction: column; align-items: center; justify-content: center;

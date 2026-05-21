@@ -146,6 +146,8 @@
 		partsTotal?: number;
 		downloadPrice?: string;
 		displayName?: string;
+		downloadsUsed?: number;
+		downloadsMax?: number;
 	}
 
 	let vaultFiles = $state<VaultFile[]>([]);
@@ -208,6 +210,8 @@
 	let downloadPaymentAmount = $state('');
 	let downloadPollingTimer = $state<ReturnType<typeof setInterval> | null>(null);
 	let downloadToken = $state('');
+	let downloadsUsed = $state(0);
+	let downloadsMax = $state(10);
 
 	async function handleDownload(file: VaultFile) {
 		if (!encryptionKey || downloadingFile) return;
@@ -225,9 +229,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ fileKey: file.fileKey })
 			});
-			const tokenData = await tokenResp.json() as { success: boolean; data?: { hasToken: boolean; token?: string } };
+			const tokenData = await tokenResp.json() as { success: boolean; data?: { hasToken: boolean; token?: string; downloadsUsed?: number; downloadsMax?: number } };
 			if (tokenData.success && tokenData.data?.hasToken && tokenData.data.token) {
 				downloadToken = tokenData.data.token;
+				downloadsUsed = tokenData.data.downloadsUsed || 0;
+				downloadsMax = tokenData.data.downloadsMax || 10;
 				downloadPayingFile = file;
 				cliModalFile = file;
 				await copyDownloadCommand(file);
@@ -260,10 +266,12 @@
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({ orderId: downloadOrderId })
 					});
-					const checkData = await checkResp.json() as { success: boolean; data?: { paid: boolean; token?: string } };
+					const checkData = await checkResp.json() as { success: boolean; data?: { paid: boolean; token?: string; downloadsMax?: number } };
 					if (checkData.success && checkData.data?.paid && checkData.data.token) {
 						stopDownloadPolling();
 						downloadToken = checkData.data.token;
+						downloadsUsed = 0;
+						downloadsMax = checkData.data.downloadsMax || 10;
 						await startDownloadWithToken(file, checkData.data.token);
 					}
 				} catch { /* keep polling */ }
@@ -312,7 +320,7 @@
 					downloadProgress = { ...progress };
 					const elapsed = (Date.now() - downloadStartTime) / 1000;
 					if (elapsed > 0 && progress.completedChunks > 0) {
-						const bytesPerSec = progress.completedChunks * 10 * 1024 * 1024 / elapsed;
+						const bytesPerSec = progress.completedChunks * 100 * 1024 * 1024 / elapsed;
 						downloadSpeed = `${formatSize(bytesPerSec)}/s`;
 					}
 				},
@@ -320,6 +328,9 @@
 				file.partsTotal,
 				resumeExisting
 			);
+			// Show completion
+			downloadProgress = { totalChunks: file.partsTotal || 0, completedChunks: file.partsTotal || 0, percent: 100, status: 'completed' };
+			downloadsUsed++;
 		} catch { /* error via progress callback */ }
 		finally {
 			downloadingFile = null;
@@ -340,7 +351,8 @@
 		if (!encryptionKey) return;
 		const keyStr = await exportKeyToBase64Url(encryptionKey);
 		const name = file.originalName || file.fileHash.slice(0, 12) + '.bin';
-		const url = `https://snapshare.link/d#key=${keyStr}&file=${encodeURIComponent(file.fileKey)}&name=${encodeURIComponent(name)}&parts=${file.partsTotal}&plan=${file.plan}&hash=${file.fileHash}`;
+		const tokenParam = downloadToken ? `&token=${downloadToken}` : '';
+		const url = `https://snapshare.link/d#key=${keyStr}&file=${encodeURIComponent(file.fileKey)}&name=${encodeURIComponent(name)}&parts=${file.partsTotal}&plan=${file.plan}&hash=${file.fileHash}${tokenParam}`;
 		cliCommand = `deno run -A jsr:@snapshare/download "${url}"`;
 		cliModalFile = file;
 		showCliModal = true;
@@ -448,7 +460,7 @@
 									<button class="btn btn-secondary btn-small" onclick={() => handleResumeUpload(file)}>
 										{i18n.t('vault.retry')}
 									</button>
-								{:else if downloadingFile === file.fileKey && downloadProgress}
+								{:else if downloadingFile === file.fileKey && downloadProgress && downloadProgress.status !== 'completed'}
 									<div class="download-progress-inline">
 										<div class="download-progress-top">
 											<span>{Math.round(downloadProgress.percent)}% ({downloadProgress.completedChunks}/{downloadProgress.totalChunks})</span>
@@ -463,13 +475,17 @@
 											<div class="download-speed">{downloadSpeed}</div>
 										{/if}
 									</div>
+								{:else if downloadProgress && downloadProgress.status === 'completed' && downloadPayingFile?.fileKey === file.fileKey}
+									<div class="download-complete-inline">
+										<span>✅ {i18n.t('vault.downloadComplete')}</span>
+									</div>
 								{:else}
 									<button
 										class="btn btn-secondary btn-small"
 										onclick={() => handleDownload(file)}
 										disabled={!!downloadingFile}
 									>
-										{i18n.t('channel.fileItem.download')} · {file.downloadPrice} USDC
+										{i18n.t('channel.fileItem.download')}{#if file.downloadsUsed != null} · {file.downloadsUsed}/{file.downloadsMax}{:else} · {file.downloadPrice} USDC{/if}
 									</button>
 								{/if}
 							</div>
@@ -540,6 +556,10 @@
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div class="cli-modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
 				<h3 class="cli-modal-title">{i18n.t('vault.downloadMethod')}</h3>
+
+				<div class="download-quota">
+					{i18n.t('vault.downloadsRemaining')}: {downloadsMax - downloadsUsed} / {downloadsMax}
+				</div>
 
 				<div class="download-option download-option-recommended">
 					<div class="download-option-badge">{i18n.t('vault.recommended')}</div>
@@ -939,6 +959,16 @@
 		margin-bottom: var(--space-2);
 		text-align: center;
 		line-height: 1.5;
+	}
+
+	.download-complete-inline {
+		font-size: var(--text-sm); color: hsl(120, 50%, 40%); font-weight: var(--font-medium);
+	}
+	.download-quota {
+		font-size: var(--text-sm); color: var(--color-muted-foreground);
+		padding: var(--space-2) var(--space-3);
+		background: var(--color-panel-2); border-radius: var(--radius-md);
+		text-align: center;
 	}
 
 	/* Download payment modal */

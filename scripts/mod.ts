@@ -39,19 +39,58 @@ async function decryptChunk(key: CryptoKey, data: ArrayBuffer): Promise<ArrayBuf
 
 // --- Network ---
 
-async function downloadChunk(url: string): Promise<ArrayBuffer> {
+async function downloadChunk(url: string, onProgress?: (loaded: number, total: number) => void): Promise<ArrayBuffer> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      return await resp.arrayBuffer();
+      const contentLength = parseInt(resp.headers.get("content-length") || "0");
+      if (!contentLength || !resp.body) return await resp.arrayBuffer();
+      // Stream with progress
+      const reader = resp.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        onProgress?.(loaded, contentLength);
+      }
+      const result = new Uint8Array(loaded);
+      let offset = 0;
+      for (const c of chunks) { result.set(c, offset); offset += c.length; }
+      return result.buffer as ArrayBuffer;
     } catch (e) {
       if (attempt === MAX_RETRIES) throw e;
-      console.log(`  ⚠ retry ${attempt}/${MAX_RETRIES}: ${e instanceof Error ? e.message : e}`);
+      console.log(`\n  ⚠ retry ${attempt}/${MAX_RETRIES}: ${e instanceof Error ? e.message : e}`);
       await new Promise((r) => setTimeout(r, RETRY_DELAY * attempt));
     }
   }
   throw new Error("unreachable");
+}
+
+// Get signed download URL via API (token-based)
+async function getChunkUrl(apiBase: string, token: string, partNumber: number): Promise<string> {
+  const resp = await fetch(`${apiBase}/api/vault/download`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, partNumber })
+  });
+  const data = await resp.json() as { success: boolean; data?: { url: string }; error?: string };
+  if (!data.success || !data.data) throw new Error(data.error || "Failed to get download URL");
+  return data.data.url;
+}
+
+// Start download session (increments download counter)
+async function startDownloadSession(apiBase: string, token: string): Promise<void> {
+  const resp = await fetch(`${apiBase}/api/vault/download`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token })
+  });
+  const data = await resp.json() as { success: boolean; error?: string };
+  if (!data.success) throw new Error(data.error || "Failed to start download");
 }
 
 // --- Helpers ---
@@ -71,7 +110,7 @@ function fmtTime(s: number): string {
 
 // --- Parse download URL ---
 
-function parseDownloadUrl(url: string): { cdnUrl: string; key: string; name: string; parts: number; fileHash: string } {
+function parseDownloadUrl(url: string): { cdnUrl: string; apiBase: string; token: string; key: string; name: string; parts: number; fileHash: string } {
   const fragment = url.split("#")[1];
   if (!fragment) throw new Error("Invalid download URL: missing # fragment");
 
@@ -82,11 +121,13 @@ function parseDownloadUrl(url: string): { cdnUrl: string; key: string; name: str
   const parts = parseInt(params.get("parts") || "0");
   const plan = params.get("plan") || "30d";
   const fileHash = params.get("hash") || "";
+  const token = params.get("token") || "";
 
   if (!key || !file || !parts) throw new Error("Invalid download URL: missing key, file, or parts");
 
   const cdnHost = plan === "7d" ? "paid-cdn-7days.snapshare.link" : "paid-cdn.snapshare.link";
-  return { cdnUrl: `https://${cdnHost}/${file}`, key, name, parts, fileHash };
+  const origin = url.split("#")[0].replace(/\/d$/, ""); // https://snapshare.link
+  return { cdnUrl: `https://${cdnHost}/${file}`, apiBase: origin, token, key, name, parts, fileHash };
 }
 
 // --- Helpers: default download directory ---
@@ -106,6 +147,8 @@ function getDownloadsDir(): string {
 
 async function main() {
   let cdnUrl: string;
+  let apiBase = "";
+  let token = "";
   let keyStr: string;
   let fileName: string;
   let partsTotal: number;
@@ -117,6 +160,8 @@ async function main() {
   if (rawArgs.length >= 1 && rawArgs[0].startsWith("http")) {
     const parsed = parseDownloadUrl(rawArgs[0]);
     cdnUrl = parsed.cdnUrl;
+    apiBase = parsed.apiBase;
+    token = parsed.token;
     keyStr = parsed.key;
     fileName = parsed.name;
     partsTotal = parsed.parts;
@@ -185,28 +230,53 @@ Supports resume — re-run the same command to continue a partial download.
 
   const t0 = Date.now();
   let totalBytes = 0;
-  let currentPart = startChunk;
+  let chunkLoaded = 0;
+  let chunkTotal = 0;
 
-  // Refresh display every second
-  const ticker = setInterval(() => {
+  // Start download session if using token
+  if (token && apiBase) {
+    await startDownloadSession(apiBase, token);
+    console.log(`🔑 Token authenticated\n`);
+  }
+
+  function renderProgress(partsDone: number) {
     const elapsed = (Date.now() - t0) / 1000;
-    const done = currentPart - startChunk;
     const speed = elapsed > 0 ? totalBytes / elapsed : 0;
-    const remaining = done > 0 ? ((partsTotal - currentPart + 1) / done) * elapsed : 0;
-    const pct = Math.round(((currentPart - 1) / partsTotal) * 100);
+    const partsCompleted = partsDone - startChunk + 1;
+    const remaining = partsCompleted > 0 ? ((partsTotal - partsDone) / partsCompleted) * elapsed : 0;
+    // Include intra-chunk progress
+    const chunkFrac = chunkTotal > 0 ? chunkLoaded / chunkTotal : 0;
+    const effectiveDone = partsDone - 1 + chunkFrac;
+    const pct = Math.min(100, Math.round((effectiveDone / partsTotal) * 100));
     const bar = "█".repeat(Math.floor(pct / 2.5)) + "░".repeat(40 - Math.floor(pct / 2.5));
     Deno.stdout.writeSync(
-      new TextEncoder().encode(`\r  ${bar} ${pct}% (${currentPart - 1}/${partsTotal}) ${fmt(speed)}/s ${fmtTime(elapsed)} / ~${fmtTime(remaining)} left  `)
+      new TextEncoder().encode(`\r  ${bar} ${pct}% (${partsDone - 1}/${partsTotal}) ${fmt(speed)}/s ${fmtTime(elapsed)} / ~${fmtTime(remaining)} left  `)
     );
-  }, 1000);
+  }
+
+  const ticker = setInterval(() => renderProgress(Math.min(startChunk + Math.floor(totalBytes / PART_SIZE), partsTotal)), 1000);
 
   try {
     for (let i = startChunk; i <= partsTotal; i++) {
-      currentPart = i;
-      const enc = await downloadChunk(`${cdnUrl}/${i}`);
+      // Get chunk URL: token-based API or direct CDN
+      let chunkUrl: string;
+      if (token && apiBase) {
+        chunkUrl = await getChunkUrl(apiBase, token, i);
+      } else {
+        chunkUrl = `${cdnUrl}/${i}`;
+      }
+
+      chunkLoaded = 0;
+      chunkTotal = 0;
+      const enc = await downloadChunk(chunkUrl, (loaded, total) => {
+        chunkLoaded = loaded;
+        chunkTotal = total;
+        totalBytes = ((i - startChunk) * PART_SIZE) + loaded;
+        renderProgress(i);
+      });
       const dec = await decryptChunk(key, enc);
       await file.write(new Uint8Array(dec));
-      totalBytes += dec.byteLength;
+      totalBytes = (i - startChunk + 1) * PART_SIZE;
     }
     clearInterval(ticker);
 

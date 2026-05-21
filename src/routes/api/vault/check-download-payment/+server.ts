@@ -61,7 +61,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			private_key: order.privateKeyHex,
 			payment_amount: order.amount,
 			downloads_used: 0,
-			downloads_max: 3,
+			downloads_max: 10,
 			expires_at: now + 24 * 60 * 60 * 1000,
 			created_at: now
 		});
