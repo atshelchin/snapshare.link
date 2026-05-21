@@ -65,34 +65,30 @@
 	let fileKey = $state('');
 	let partsTotal = $state(0);
 	let partsDone = $state(0);
-	let currentPartProgress = $state(0);
 	let isPaused = $state(false);
 	let abortController = $state<AbortController | null>(null);
 
 	let uploadStartTime = $state(0);
 
 	let overallProgress = $derived(
-		partsTotal > 0 ? ((partsDone + currentPartProgress / 100) / partsTotal) * 100 : 0
+		partsTotal > 0 ? (partsDone / partsTotal) * 100 : 0
 	);
 
 	let uploadSpeedStr = $state('');
+	let uploadTimeStr = $state('');
 
-	let timeEstimate = $derived(() => {
-		if (!uploadStartTime || partsDone === 0) return '';
+	function updateUploadStats() {
+		if (!uploadStartTime || partsDone === 0) { uploadSpeedStr = ''; uploadTimeStr = ''; return; }
 		const elapsed = (Date.now() - uploadStartTime) / 1000;
-		const secsPerPart = elapsed / partsDone;
-		const remaining = Math.ceil(secsPerPart * (partsTotal - partsDone));
-		const elapsedMin = Math.floor(elapsed / 60);
-		const elapsedSec = Math.floor(elapsed % 60);
-		const remMin = Math.floor(remaining / 60);
-		const remSec = remaining % 60;
-		const elapsedStr = elapsedMin > 0 ? `${elapsedMin}m${elapsedSec}s` : `${elapsedSec}s`;
-		const remStr = remMin > 0 ? `${remMin}m${remSec}s` : `${remSec}s`;
-		// Update speed (bytes per second based on parts done * partSize / elapsed)
 		const bytesPerSec = (partsDone * partSize) / elapsed;
 		uploadSpeedStr = formatSize(bytesPerSec) + '/s';
-		return `${elapsedStr} / ~${remStr}`;
-	});
+		const remaining = Math.ceil((elapsed / partsDone) * (partsTotal - partsDone));
+		const eM = Math.floor(elapsed / 60), eS = Math.floor(elapsed % 60);
+		const rM = Math.floor(remaining / 60), rS = remaining % 60;
+		const eStr = eM > 0 ? `${eM}m${eS}s` : `${eS}s`;
+		const rStr = rM > 0 ? `${rM}m${rS}s` : `${rS}s`;
+		uploadTimeStr = `${eStr} / ~${rStr}`;
+	}
 
 	function formatSize(bytes: number): string {
 		if (bytes === 0) return '0 B';
@@ -312,7 +308,6 @@
 			fileKey = data.data.fileKey;
 			partsTotal = data.data.partsTotal;
 			partsDone = 0;
-			currentPartProgress = 0;
 			isPaused = false;
 
 			saveUploadState();
@@ -324,47 +319,67 @@
 	}
 
 	const MAX_RETRIES = 3;
-	const RETRY_DELAY = 3000; // 3s
+	const RETRY_DELAY = 3000;
+	const CONCURRENCY = 5;
+
+	async function uploadPartWithRetry(partNum: number): Promise<void> {
+		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+			try {
+				await uploadSinglePart(partNum);
+				return;
+			} catch (e) {
+				if (isPaused) throw new Error('paused');
+				if (attempt < MAX_RETRIES) {
+					await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
+				} else {
+					throw e;
+				}
+			}
+		}
+	}
 
 	async function uploadParts() {
 		if (!selectedFile) return;
 
-		for (let partNum = partsDone + 1; partNum <= partsTotal; partNum++) {
-			if (isPaused) { uploadState = 'paused'; return; }
+		const remaining: number[] = [];
+		for (let i = partsDone + 1; i <= partsTotal; i++) remaining.push(i);
 
-			let success = false;
-			for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+		let failed = false;
+		let failError = '';
+
+		async function worker() {
+			while (remaining.length > 0 && !failed && !isPaused) {
+				const partNum = remaining.shift()!;
 				try {
-					await uploadSinglePart(partNum);
-					success = true;
-					break;
+					await uploadPartWithRetry(partNum);
+					partsDone++;
+					updateUploadStats();
+					saveUploadState();
 				} catch (e) {
-					if (isPaused) { uploadState = 'paused'; return; }
-					if (attempt < MAX_RETRIES) {
-						error = `Part ${partNum} failed (attempt ${attempt}/${MAX_RETRIES}), retrying...`;
-						await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
-					} else {
-						// All retries exhausted — try recreating the upload session
-						error = i18n.t('vault.sessionExpired');
-						try {
-							await recreateUploadSession();
-							partNum = partsDone; // will become partsDone+1 on next iteration
-							break;
-						} catch {
-							error = `Part ${partNum} failed after ${MAX_RETRIES} attempts: ${e}`;
-							uploadState = 'failed';
-							return;
-						}
-					}
+					if (isPaused || String(e) === 'Error: paused') return;
+					failed = true;
+					failError = `Part ${partNum}: ${e}`;
 				}
 			}
+		}
 
-			if (success) {
-				partsDone = partNum;
-				currentPartProgress = 0;
-				error = '';
-				saveUploadState();
+		// Launch concurrent workers
+		const workers = Array.from({ length: Math.min(CONCURRENCY, remaining.length) }, () => worker());
+		await Promise.all(workers);
+
+		if (isPaused) { uploadState = 'paused'; return; }
+		if (failed) {
+			error = failError;
+			// Try recreating session
+			try {
+				error = i18n.t('vault.sessionExpired');
+				await recreateUploadSession();
+				await uploadParts(); // restart
+			} catch {
+				error = failError;
+				uploadState = 'failed';
 			}
+			return;
 		}
 
 		// Complete with retries
@@ -378,7 +393,7 @@
 				const data = await resp.json();
 				if (data.success) {
 					uploadState = 'completed';
-				onUploadComplete?.();
+					onUploadComplete?.();
 					clearUploadState();
 					return;
 				}
@@ -409,7 +424,6 @@
 		fileKey = data.data.fileKey;
 		partsTotal = data.data.partsTotal;
 		partsDone = 0;
-		currentPartProgress = 0;
 		saveUploadState();
 	}
 
@@ -436,9 +450,7 @@
 			abortController = ctrl;
 			const xhr = new XMLHttpRequest();
 			xhr.open('PUT', urlData.data.url);
-			xhr.upload.addEventListener('progress', (e) => {
-				if (e.lengthComputable) currentPartProgress = (e.loaded / e.total) * 100;
-			});
+			xhr.upload.addEventListener('progress', () => {});
 			xhr.addEventListener('load', () => {
 				if (xhr.status >= 200 && xhr.status < 300) resolve();
 				else reject(new Error(`HTTP ${xhr.status}`));
@@ -473,7 +485,6 @@
 		fileKey = '';
 		partsTotal = 0;
 		partsDone = 0;
-		currentPartProgress = 0;
 		isPaused = false;
 		orderId = '';
 		paymentAddress = '';
@@ -502,7 +513,7 @@
 				orderId = state.orderId || '';
 				selectedPlan = state.plan || '7d';
 				uploadState = 'paused';
-				error = i18n.t('vault.selectFileToResume');
+				error = '';
 			} else {
 				clearUploadState();
 			}
@@ -585,11 +596,11 @@
 				<div class="progress-bar" style="width: {overallProgress}%"></div>
 			</div>
 			<div class="progress-meta">
-				<span>{selectedFile?.name}</span>
+				<span>{selectedFile?.name || i18n.t('vault.selectFileToResume')}</span>
 				<span>{i18n.t('vault.partProgress').replace('{done}', String(partsDone)).replace('{total}', String(partsTotal))}</span>
 			</div>
-			{#if timeEstimate()}
-				<div class="progress-time">⏱ {timeEstimate()} · {uploadSpeedStr}</div>
+			{#if uploadTimeStr}
+				<div class="progress-time">⏱ {uploadTimeStr} · {uploadSpeedStr}</div>
 			{/if}
 			{#if error}
 				<div class="vault-warning">{error}</div>
