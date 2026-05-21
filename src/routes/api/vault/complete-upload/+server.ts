@@ -21,6 +21,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return Response.json({ success: false, error: 'Invalid plan' }, { status: 400 });
 		}
 
+		// ETags are fetched server-side via ListParts — client ETags ignored
 		await completeMultipartUpload(env, fileKey, uploadId, parts, plan as StoragePlan);
 
 		await db

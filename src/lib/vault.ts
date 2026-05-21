@@ -146,16 +146,68 @@ export async function getPartUploadUrl(
 	return getSignedUrl(s3, command, { expiresIn: 3600 });
 }
 
-// Complete the multipart upload via raw S3 API
+// List uploaded parts to get their ETags from R2
+async function listParts(
+	env: VaultEnv,
+	fileKey: string,
+	uploadId: string,
+	plan: StoragePlan
+): Promise<{ partNumber: number; etag: string }[]> {
+	const endpoint = getR2Endpoint(env);
+	const bucket = getBucketName(env, plan);
+	const allParts: { partNumber: number; etag: string }[] = [];
+	let marker = '';
+
+	// Paginate through all parts (max 1000 per request)
+	while (true) {
+		const params = `uploadId=${uploadId}${marker ? `&part-number-marker=${marker}` : ''}`;
+		const signer = new AwsV4Signer({
+			accessKeyId: env.ACCESS_KEY_ID,
+			secretAccessKey: env.SECRET_ACCESS_KEY,
+			region: 'auto',
+			service: 's3',
+			url: `${endpoint}/${bucket}/${fileKey}?${params}`,
+			method: 'GET'
+		});
+
+		const signed = await signer.sign();
+		const resp = await fetch(signed.url, { headers: signed.headers });
+		if (!resp.ok) {
+			const text = await resp.text();
+			throw new Error(`ListParts failed: ${resp.status} ${text}`);
+		}
+
+		const xml = await resp.text();
+		const partMatches = xml.matchAll(/<Part><PartNumber>(\d+)<\/PartNumber><ETag>(.+?)<\/ETag>/g);
+		for (const m of partMatches) {
+			allParts.push({ partNumber: parseInt(m[1]), etag: m[2] });
+		}
+
+		const isTruncated = xml.includes('<IsTruncated>true</IsTruncated>');
+		if (!isTruncated) break;
+		const nextMarker = xml.match(/<NextPartNumberMarker>(\d+)<\/NextPartNumberMarker>/);
+		if (!nextMarker) break;
+		marker = nextMarker[1];
+	}
+
+	return allParts.sort((a, b) => a.partNumber - b.partNumber);
+}
+
+// Complete the multipart upload — fetches ETags from R2 via ListParts
 export async function completeMultipartUpload(
 	env: VaultEnv,
 	fileKey: string,
 	uploadId: string,
-	parts: { partNumber: number; etag: string }[],
+	_parts: { partNumber: number; etag: string }[], // kept for API compat, ignored
 	plan: StoragePlan
 ): Promise<void> {
 	const endpoint = getR2Endpoint(env);
 	const bucket = getBucketName(env, plan);
+
+	// Get real ETags from R2 instead of trusting client
+	const parts = await listParts(env, fileKey, uploadId, plan);
+	if (parts.length === 0) throw new Error('No parts found for this upload');
+
 	const partsXml = parts
 		.map((p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${p.etag}</ETag></Part>`)
 		.join('');

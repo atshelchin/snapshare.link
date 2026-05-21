@@ -70,9 +70,25 @@
 	let isPaused = $state(false);
 	let abortController = $state<AbortController | null>(null);
 
+	let uploadStartTime = $state(0);
+
 	let overallProgress = $derived(
 		partsTotal > 0 ? ((partsDone + currentPartProgress / 100) / partsTotal) * 100 : 0
 	);
+
+	let timeEstimate = $derived(() => {
+		if (!uploadStartTime || partsDone === 0) return '';
+		const elapsed = (Date.now() - uploadStartTime) / 1000;
+		const secsPerPart = elapsed / partsDone;
+		const remaining = Math.ceil(secsPerPart * (partsTotal - partsDone));
+		const elapsedMin = Math.floor(elapsed / 60);
+		const elapsedSec = Math.floor(elapsed % 60);
+		const remMin = Math.floor(remaining / 60);
+		const remSec = remaining % 60;
+		const elapsedStr = elapsedMin > 0 ? `${elapsedMin}m${elapsedSec}s` : `${elapsedSec}s`;
+		const remStr = remMin > 0 ? `${remMin}m${remSec}s` : `${remSec}s`;
+		return `${elapsedStr} / ~${remStr}`;
+	});
 
 	function formatSize(bytes: number): string {
 		if (bytes === 0) return '0 B';
@@ -252,6 +268,7 @@
 		if (!selectedFile) return;
 		uploadState = 'uploading';
 		error = '';
+		uploadStartTime = Date.now();
 
 		// If we already have fileKey/uploadId (resumed from localStorage), skip create-upload
 		if (fileKey && uploadId) {
@@ -432,6 +449,8 @@
 			xhr.send(new Blob([chunkData]));
 		});
 
+		if (!etag) throw new Error('No ETag in response — check R2 CORS ExposeHeaders includes ETag');
+
 		// Avoid duplicates if retrying a part that partially succeeded
 		completedParts = [...completedParts.filter(p => p.partNumber !== partNumber), { partNumber, etag }];
 		abortController = null;
@@ -581,6 +600,9 @@
 				<span>{selectedFile?.name}</span>
 				<span>{i18n.t('vault.partProgress').replace('{done}', String(partsDone)).replace('{total}', String(partsTotal))}</span>
 			</div>
+			{#if timeEstimate()}
+				<div class="progress-time">⏱ {timeEstimate()}</div>
+			{/if}
 			{#if error}
 				<div class="vault-warning">{error}</div>
 			{/if}
@@ -745,6 +767,7 @@
 	.progress-bar-container { height: 8px; background: var(--color-panel-2); border-radius: var(--radius-full); overflow: hidden; }
 	.progress-bar { height: 100%; background: linear-gradient(90deg, var(--color-primary), hsla(var(--brand-hue), var(--brand-saturation), 60%, 1)); transition: width 0.3s ease; border-radius: var(--radius-full); }
 	.progress-meta { display: flex; justify-content: space-between; font-size: var(--text-sm); color: var(--color-muted-foreground); }
+	.progress-time { font-size: var(--text-xs); color: var(--color-muted-foreground); text-align: right; }
 	.progress-actions { display: flex; gap: var(--space-2); }
 	.button-secondary { background: var(--color-panel-2); color: var(--color-foreground); border: 1px solid var(--color-border); }
 	.button-danger { background: hsla(0, 70%, 50%, 0.1); color: var(--color-danger); border: 1px solid var(--color-danger); }

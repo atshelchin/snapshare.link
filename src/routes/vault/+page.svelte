@@ -208,7 +208,8 @@
 		const ctrl = new AbortController();
 		downloadAbort = ctrl;
 
-		const cdnUrl = `https://paid-cdn.snapshare.link/${file.fileKey}`;
+		const cdnHost = file.plan === '7d' ? 'paid-cdn-7days.snapshare.link' : 'paid-cdn.snapshare.link';
+		const cdnUrl = `https://${cdnHost}/${file.fileKey}`;
 		// Use hash as filename fallback (original name is encrypted in the file)
 		const fileName = file.fileHash.slice(0, 12) + '.bin';
 
