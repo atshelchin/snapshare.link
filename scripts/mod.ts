@@ -110,6 +110,7 @@ async function main() {
   let fileName: string;
   let partsTotal: number;
   let outDir: string | undefined;
+  let expectedHash = "";
 
   const rawArgs = Deno.args;
 
@@ -119,6 +120,7 @@ async function main() {
     keyStr = parsed.key;
     fileName = parsed.name;
     partsTotal = parsed.parts;
+    expectedHash = parsed.fileHash;
     outDir = rawArgs[1]; // optional
   } else {
     const { parseArgs } = await import("@std/cli/parse-args");
@@ -245,7 +247,15 @@ Supports resume — re-run the same command to continue a partial download.
     chunkHashes.forEach((h, i) => combined.set(h, i * 32));
     const rootBuf = new Uint8Array(await crypto.subtle.digest("SHA-256", combined));
     const merkleRoot = Array.from(rootBuf).map(b => b.toString(16).padStart(2, "0")).join("");
-    console.log(`   Merkle root: ${merkleRoot} (${chunkHashes.length} chunks × ${fmt(hashPartSize)})`);
+    if (expectedHash && merkleRoot === expectedHash) {
+      console.log(`   ✅ Verified: ${merkleRoot}`);
+    } else if (expectedHash) {
+      console.log(`   ❌ Hash mismatch!`);
+      console.log(`      Expected: ${expectedHash}`);
+      console.log(`      Actual:   ${merkleRoot}`);
+    } else {
+      console.log(`   Merkle root: ${merkleRoot}`);
+    }
     console.log();
   } catch (e) {
     clearInterval(ticker);
