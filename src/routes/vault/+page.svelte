@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { useI18n } from '@shelchin/i18n/svelte';
 	import VaultUploader from '../../components/vault-uploader.svelte';
+	import { downloadAndDecrypt, isFileSystemAccessSupported, type DownloadProgress } from '$lib/vault-download';
+	import { decryptString } from '$lib/crypto';
 	import {
 		isWebAuthnSupported,
 		registerPasskey,
@@ -127,6 +129,107 @@
 		}
 	}
 
+	// File list
+	interface VaultFile {
+		fileKey: string;
+		fileHash: string;
+		fileSize: number;
+		encrypted: boolean;
+		plan: string;
+		expiresAt: number;
+		createdAt: number;
+		// Client-side resolved
+		displayName?: string;
+	}
+
+	let vaultFiles = $state<VaultFile[]>([]);
+	let isLoadingFiles = $state(false);
+	let downloadingFile = $state<string | null>(null); // fileKey of currently downloading
+	let downloadProgress = $state<DownloadProgress | null>(null);
+	let downloadAbort = $state<AbortController | null>(null);
+
+	async function loadFiles() {
+		if (!vaultChannelId) return;
+		isLoadingFiles = true;
+		try {
+			const resp = await fetch('/api/vault/list-files', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ channelId: vaultChannelId })
+			});
+			const data = await resp.json();
+			if (data.success) {
+				vaultFiles = data.data;
+			}
+		} catch {
+			// ignore
+		} finally {
+			isLoadingFiles = false;
+		}
+	}
+
+	// Load files when authenticated
+	$effect(() => {
+		if (isAuthenticated && vaultChannelId) {
+			loadFiles();
+		}
+	});
+
+	function formatSize(bytes: number): string {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return (bytes / Math.pow(k, i)).toFixed(i > 2 ? 2 : 0) + ' ' + sizes[i];
+	}
+
+	function formatTimeLeft(expiresAt: number): string {
+		const ms = expiresAt - Date.now();
+		if (ms <= 0) return i18n.t('vault.expired');
+		const hours = Math.floor(ms / 3600000);
+		const days = Math.floor(hours / 24);
+		if (days > 0) return `${days}d ${hours % 24}h`;
+		return `${hours}h`;
+	}
+
+	async function handleDownload(file: VaultFile) {
+		if (!encryptionKey || downloadingFile) return;
+
+		if (!isFileSystemAccessSupported()) {
+			alert('Please use Chrome or Edge for large file downloads.');
+			return;
+		}
+
+		downloadingFile = file.fileKey;
+		downloadProgress = null;
+
+		const ctrl = new AbortController();
+		downloadAbort = ctrl;
+
+		const cdnUrl = `https://paid-cdn.snapshare.link/${file.fileKey}`;
+		// Use hash as filename fallback (original name is encrypted in the file)
+		const fileName = file.fileHash.slice(0, 12) + '.bin';
+
+		try {
+			await downloadAndDecrypt(
+				cdnUrl,
+				fileName,
+				encryptionKey,
+				(progress) => { downloadProgress = { ...progress }; },
+				ctrl.signal
+			);
+		} catch {
+			// error already reported via progress callback
+		} finally {
+			downloadingFile = null;
+			downloadAbort = null;
+		}
+	}
+
+	function cancelDownload() {
+		downloadAbort?.abort();
+	}
+
 	function goHome() {
 		goto(resolve('/'));
 	}
@@ -162,6 +265,71 @@
 
 		<div class="vault-content">
 			<VaultUploader channelId={vaultChannelId} {encryptionKey} />
+		</div>
+
+		<!-- File list -->
+		<div class="vault-files-section">
+			<div class="vault-files-header">
+				<h2 class="vault-files-title">{i18n.t('vault.myFiles')}</h2>
+				<button class="btn btn-secondary btn-small" onclick={loadFiles}>
+					{i18n.t('vault.refresh')}
+				</button>
+			</div>
+
+			{#if isLoadingFiles}
+				<div class="vault-files-empty">{i18n.t('channel.fileList.loading')}</div>
+			{:else if vaultFiles.length === 0}
+				<div class="vault-files-empty">{i18n.t('channel.fileList.empty')}</div>
+			{:else}
+				<div class="vault-files-list">
+					{#each vaultFiles as file (file.fileKey)}
+						<div class="vault-file-item">
+							<div class="vault-file-info">
+								<div class="vault-file-name">
+									🔒 {file.fileHash.slice(0, 16)}...
+								</div>
+								<div class="vault-file-meta">
+									<span>{formatSize(file.fileSize)}</span>
+									<span>·</span>
+									<span>{file.plan}</span>
+									<span>·</span>
+									<span>{i18n.t('vault.expiresIn')} {formatTimeLeft(file.expiresAt)}</span>
+								</div>
+							</div>
+							<div class="vault-file-actions">
+								{#if downloadingFile === file.fileKey && downloadProgress}
+									<div class="download-progress-mini">
+										<span>{Math.round(downloadProgress.percent)}%</span>
+										<button class="btn btn-secondary btn-small" onclick={cancelDownload}>
+											{i18n.t('vault.cancel')}
+										</button>
+									</div>
+								{:else}
+									<button
+										class="btn btn-secondary btn-small"
+										onclick={() => handleDownload(file)}
+										disabled={!!downloadingFile}
+									>
+										{i18n.t('channel.fileItem.download')}
+									</button>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			{#if downloadProgress && downloadProgress.status === 'downloading'}
+				<div class="download-progress-bar">
+					<div class="progress-header">
+						<span>{i18n.t('vault.downloading')}</span>
+						<span>{Math.round(downloadProgress.percent)}% ({downloadProgress.completedChunks}/{downloadProgress.totalChunks})</span>
+					</div>
+					<div class="progress-bar-container">
+						<div class="progress-bar" style="width: {downloadProgress.percent}%"></div>
+					</div>
+				</div>
+			{/if}
 		</div>
 	</div>
 {:else}
@@ -410,5 +578,121 @@
 	.btn.btn-small {
 		padding: 8px 16px;
 		font-size: 13px;
+	}
+
+	/* Vault file list */
+	.vault-files-section {
+		margin-top: var(--space-8);
+		padding-top: var(--space-6);
+		border-top: 2px solid var(--color-border);
+	}
+
+	.vault-files-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--space-4);
+	}
+
+	.vault-files-title {
+		font-size: var(--text-lg);
+		font-weight: var(--font-semibold);
+		color: var(--color-foreground);
+		margin: 0;
+	}
+
+	.vault-files-empty {
+		padding: var(--space-8);
+		text-align: center;
+		color: var(--color-muted-foreground);
+		font-size: var(--text-sm);
+	}
+
+	.vault-files-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.vault-file-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-4);
+		background: var(--color-panel-1);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		transition: border-color 0.2s ease;
+	}
+
+	.vault-file-item:hover {
+		border-color: var(--color-primary);
+	}
+
+	.vault-file-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.vault-file-name {
+		font-weight: var(--font-semibold);
+		color: var(--color-foreground);
+		font-size: var(--text-sm);
+		font-family: var(--font-family-mono, monospace);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.vault-file-meta {
+		display: flex;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--color-muted-foreground);
+		margin-top: var(--space-1);
+	}
+
+	.vault-file-actions {
+		flex-shrink: 0;
+		margin-left: var(--space-3);
+	}
+
+	.download-progress-mini {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+		color: var(--color-primary);
+		font-weight: var(--font-semibold);
+	}
+
+	.download-progress-bar {
+		margin-top: var(--space-4);
+		padding: var(--space-4);
+		background: var(--color-panel-1);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+
+	.progress-header {
+		display: flex;
+		justify-content: space-between;
+		font-size: var(--text-sm);
+		color: var(--color-muted-foreground);
+		margin-bottom: var(--space-2);
+	}
+
+	.progress-bar-container {
+		height: 6px;
+		background: var(--color-panel-2);
+		border-radius: var(--radius-full);
+		overflow: hidden;
+	}
+
+	.progress-bar {
+		height: 100%;
+		background: linear-gradient(90deg, var(--color-primary), hsla(var(--brand-hue), var(--brand-saturation), 60%, 1));
+		transition: width 0.3s ease;
+		border-radius: var(--radius-full);
 	}
 </style>
