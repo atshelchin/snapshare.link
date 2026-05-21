@@ -81,13 +81,21 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return Response.json({ success: false, error: 'Order does not match' }, { status: 403 });
 		}
 
-		// Verify payment
-		const payment = await checkPaymentToAddress(order.paymentAddress, order.amount);
-		if (!payment.paid) {
-			return Response.json(
-				{ success: false, error: 'Payment not received yet' },
-				{ status: 402 }
-			);
+		// Check if payment already confirmed in D1 (skip slow RPC)
+		const existingOrder = await db.select({ payment_tx: paidFiles.payment_tx })
+			.from(paidFiles).where(eq(paidFiles.order_id, orderId)).limit(1).all();
+		let paymentTx = existingOrder[0]?.payment_tx || '';
+
+		if (!paymentTx) {
+			// Not yet confirmed in D1 — check on-chain
+			const payment = await checkPaymentToAddress(order.paymentAddress, order.amount);
+			if (!payment.paid) {
+				return Response.json(
+					{ success: false, error: 'Payment not received yet' },
+					{ status: 402 }
+				);
+			}
+			paymentTx = payment.txHash || orderId;
 		}
 
 		const userIP =
@@ -116,7 +124,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			file_name: fileHash,
 			file_size: fileSize,
 			encrypted: encrypted ? 1 : 0,
-			payment_tx: payment.txHash || orderId,
+			payment_tx: paymentTx,
 			payment_amount: order.amount,
 			download_price: (Math.max(1, Math.ceil(fileSize / (1024 * 1024 * 1024))) * 0.01).toFixed(2),
 			upload_status: 'uploading',
