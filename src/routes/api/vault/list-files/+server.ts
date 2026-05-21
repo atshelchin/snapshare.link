@@ -42,7 +42,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				uploadStatus: f.upload_status,
 				orderId: f.order_id,
 				originalName: f.original_name,
-				partsTotal: f.parts_total
+				partsTotal: f.parts_total,
+				downloadPrice: f.download_price || '0.01'
 			}))
 		});
 	} catch (error) {

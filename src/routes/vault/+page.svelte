@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { useI18n } from '@shelchin/i18n/svelte';
 	import VaultUploader from '../../components/vault-uploader.svelte';
-	import { downloadAndDecrypt, isFileSystemAccessSupported, type DownloadProgress } from '$lib/vault-download';
+	import { downloadAndDecryptWithToken, isFileSystemAccessSupported, type DownloadProgress } from '$lib/vault-download';
 	import { decryptString } from '$lib/crypto';
 	import {
 		isWebAuthnSupported,
@@ -142,6 +142,7 @@
 		orderId?: string;
 		originalName?: string;
 		partsTotal?: number;
+		downloadPrice?: string;
 		displayName?: string;
 	}
 
@@ -197,14 +198,80 @@
 		return `${hours}h`;
 	}
 
-	async function handleDownload(file: VaultFile, resumeExisting = false) {
-		if (!encryptionKey || downloadingFile) return;
+	// Download payment state
+	let downloadError = $state('');
+	let downloadPayingFile = $state<VaultFile | null>(null);
+	let downloadOrderId = $state('');
+	let downloadPaymentAddress = $state('');
+	let downloadPaymentAmount = $state('');
+	let downloadPollingTimer = $state<ReturnType<typeof setInterval> | null>(null);
+	let downloadToken = $state('');
 
-		if (!isFileSystemAccessSupported()) {
-			alert('Please use Chrome or Edge for large file downloads.');
+	async function handleDownload(file: VaultFile) {
+		if (!encryptionKey || downloadingFile) return;
+		// If we already have a valid token for this file, go straight to download
+		if (downloadToken && downloadPayingFile?.fileKey === file.fileKey) {
+			await startDownloadWithToken(file, downloadToken);
 			return;
 		}
+		// Start payment flow
+		downloadPayingFile = file;
+		try {
+			const resp = await fetch('/api/vault/create-download-order', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ fileKey: file.fileKey })
+			});
+			const data = await resp.json() as { success: boolean; data?: { orderId: string; paymentAddress: string; amount: string }; error?: string };
+			if (!data.success || !data.data) {
+				downloadError = data.error || 'Failed to create download order';
+				downloadPayingFile = null;
+				return;
+			}
+			downloadOrderId = data.data.orderId;
+			downloadPaymentAddress = data.data.paymentAddress;
+			downloadPaymentAmount = data.data.amount;
+			// Poll for payment
+			downloadPollingTimer = setInterval(async () => {
+				try {
+					const checkResp = await fetch('/api/vault/check-download-payment', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ orderId: downloadOrderId })
+					});
+					const checkData = await checkResp.json() as { success: boolean; data?: { paid: boolean; token?: string } };
+					if (checkData.success && checkData.data?.paid && checkData.data.token) {
+						stopDownloadPolling();
+						downloadToken = checkData.data.token;
+						await startDownloadWithToken(file, checkData.data.token);
+					}
+				} catch { /* keep polling */ }
+			}, 5000);
+		} catch (e) {
+			downloadError = String(e);
+			downloadPayingFile = null;
+		}
+	}
 
+	function stopDownloadPolling() {
+		if (downloadPollingTimer) { clearInterval(downloadPollingTimer); downloadPollingTimer = null; }
+	}
+
+	function cancelDownloadPayment() {
+		stopDownloadPolling();
+		downloadPayingFile = null;
+		downloadOrderId = '';
+		downloadPaymentAddress = '';
+		downloadPaymentAmount = '';
+	}
+
+	async function startDownloadWithToken(file: VaultFile, token: string, resumeExisting = false) {
+		downloadPayingFile = null;
+		if (!isFileSystemAccessSupported()) {
+			// Show CLI modal instead
+			await copyDownloadCommand(file);
+			return;
+		}
 		downloadingFile = file.fileKey;
 		downloadProgress = null;
 		downloadSpeed = '';
@@ -213,15 +280,13 @@
 		const ctrl = new AbortController();
 		downloadAbort = ctrl;
 
-		const cdnHost = file.plan === '7d' ? 'paid-cdn-7days.snapshare.link' : 'paid-cdn.snapshare.link';
-		const cdnUrl = `https://${cdnHost}/${file.fileKey}`;
 		const fileName = file.originalName || file.fileHash.slice(0, 12) + '.bin';
 
 		try {
-			await downloadAndDecrypt(
-				cdnUrl,
+			await downloadAndDecryptWithToken(
+				token,
 				fileName,
-				encryptionKey,
+				encryptionKey!,
 				(progress) => {
 					downloadProgress = { ...progress };
 					const elapsed = (Date.now() - downloadStartTime) / 1000;
@@ -234,9 +299,8 @@
 				file.partsTotal,
 				resumeExisting
 			);
-		} catch {
-			// error already reported via progress callback
-		} finally {
+		} catch { /* error via progress callback */ }
+		finally {
 			downloadingFile = null;
 			downloadAbort = null;
 			downloadSpeed = '';
@@ -381,10 +445,10 @@
 								{:else}
 									<button
 										class="btn btn-secondary btn-small"
-										onclick={() => copyDownloadCommand(file)}
+										onclick={() => handleDownload(file)}
 										disabled={!!downloadingFile}
 									>
-										{i18n.t('channel.fileItem.download')}
+										{i18n.t('channel.fileItem.download')} · ${file.downloadPrice}
 									</button>
 								{/if}
 							</div>
@@ -420,10 +484,10 @@
 					<div class="download-option-title">{i18n.t('vault.browserDownload')}</div>
 					<p class="download-option-desc">{i18n.t('vault.browserDesc')}</p>
 					<div class="download-option-btns">
-						<button class="button button-secondary" onclick={() => { showCliModal = false; handleDownload(cliModalFile!); }}>
+						<button class="button button-secondary" onclick={() => { showCliModal = false; if (downloadToken && cliModalFile) startDownloadWithToken(cliModalFile, downloadToken); }}>
 							{i18n.t('vault.newDownload')}
 						</button>
-						<button class="button button-secondary" onclick={() => { showCliModal = false; handleDownload(cliModalFile!, true); }}>
+						<button class="button button-secondary" onclick={() => { showCliModal = false; if (downloadToken && cliModalFile) startDownloadWithToken(cliModalFile, downloadToken, true); }}>
 							{i18n.t('vault.resumeDownload')}
 						</button>
 					</div>

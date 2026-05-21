@@ -327,30 +327,13 @@
 		}
 	}
 
-	const MAX_RETRIES = 3;
+	const MAX_RETRIES = 5;
 	const RETRY_DELAY = 3000;
-	const CONCURRENCY = 5;
-
-	async function uploadPartWithRetry(partNum: number): Promise<void> {
-		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-			try {
-				await uploadSinglePart(partNum);
-				return;
-			} catch (e) {
-				if (isPaused) throw new Error('paused');
-				if (attempt < MAX_RETRIES) {
-					await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
-				} else {
-					throw e;
-				}
-			}
-		}
-	}
 
 	async function uploadParts() {
 		if (!selectedFile) return;
 
-		// Ask server which parts already exist
+		// Ask server which parts already exist (for resume)
 		let uploadedSet = new Set<number>();
 		try {
 			const resp = await fetch('/api/vault/check-parts', {
@@ -366,42 +349,35 @@
 			}
 		} catch { /* proceed assuming none uploaded */ }
 
-		// Build list of missing parts
-		const remaining: number[] = [];
-		for (let i = 1; i <= partsTotal; i++) {
-			if (!uploadedSet.has(i)) remaining.push(i);
-		}
+		// Serial upload: one part at a time, in order, with retry
+		for (let partNum = 1; partNum <= partsTotal; partNum++) {
+			if (isPaused) { uploadState = 'paused'; return; }
+			if (uploadedSet.has(partNum)) continue; // already uploaded
 
-		if (remaining.length === 0) {
-			// All parts already uploaded, go to complete
-		} else {
-			let failed = false;
-			let failError = '';
-
-			async function worker() {
-				while (remaining.length > 0 && !failed && !isPaused) {
-					const partNum = remaining.shift()!;
-					try {
-						await uploadPartWithRetry(partNum);
-						partsDone++;
-						updateUploadStats();
-						saveUploadState();
-					} catch (e) {
-						if (isPaused || String(e) === 'Error: paused') return;
-						failed = true;
-						failError = `Part ${partNum}: ${e}`;
+			let success = false;
+			for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				try {
+					await uploadSinglePart(partNum);
+					success = true;
+					break;
+				} catch (e) {
+					if (isPaused) { uploadState = 'paused'; return; }
+					if (attempt < MAX_RETRIES) {
+						error = `Part ${partNum} failed (${attempt}/${MAX_RETRIES}), retrying...`;
+						await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
+					} else {
+						error = `Part ${partNum} failed after ${MAX_RETRIES} attempts: ${e}`;
+						uploadState = 'failed';
+						return;
 					}
 				}
 			}
 
-			const workers = Array.from({ length: Math.min(CONCURRENCY, remaining.length) }, () => worker());
-			await Promise.all(workers);
-
-			if (isPaused) { uploadState = 'paused'; return; }
-			if (failed) {
-				error = failError;
-				uploadState = 'failed';
-				return;
+			if (success) {
+				partsDone++;
+				error = '';
+				updateUploadStats();
+				saveUploadState();
 			}
 		}
 
@@ -424,7 +400,7 @@
 			} catch (e) {
 				if (attempt === MAX_RETRIES) { error = String(e); uploadState = 'failed'; return; }
 			}
-			error = `Complete failed (attempt ${attempt}/${MAX_RETRIES}), retrying...`;
+			error = `Complete failed (${attempt}/${MAX_RETRIES}), retrying...`;
 			await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
 		}
 	}

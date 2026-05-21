@@ -11,8 +11,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import type { Env } from '$lib';
 
-// Fixed 10MB per chunk
-export const PART_SIZE = 10 * 1024 * 1024;
+// Fixed 100MB per chunk
+export const PART_SIZE = 100 * 1024 * 1024;
 
 // No hard file size limit — practically limited by storage cost
 export const MAX_FILE_SIZE = Infinity;

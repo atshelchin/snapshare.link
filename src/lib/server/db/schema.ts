@@ -37,7 +37,8 @@ export const paidFiles = sqliteTable(
 		encrypted: integer().notNull().default(0), // 0=明文 1=加密
 		payment_tx: text(), // 链上交易哈希
 		payment_amount: text(), // 支付金额 (USDC, 如 "4.50")
-		upload_id: text(), // R2 multipart upload ID
+		download_price: text(), // 下载价格 (USDC), 上传价格的 1/10, 最低 0.01
+		upload_id: text(), // legacy, unused
 		upload_status: text().notNull().default('pending'), // pending | uploading | completed | failed
 		parts_total: integer().default(0),
 		parts_done: integer().default(0),
@@ -50,5 +51,26 @@ export const paidFiles = sqliteTable(
 		index('paid_channel_id_idx').on(table.channel_id),
 		index('paid_upload_status_idx').on(table.upload_status),
 		index('paid_expires_at_idx').on(table.expires_at)
+	]
+);
+
+// 下载令牌：付费后获取 24 小时有效的下载权限
+export const downloadTokens = sqliteTable(
+	'download_tokens',
+	{
+		token: text().primaryKey(), // nanoid
+		file_key: text().notNull(), // paid_files.file_key
+		payment_tx: text(), // 下载付款链上交易
+		payment_address: text(), // 收款地址
+		private_key: text(), // 收款私钥
+		payment_amount: text(), // 支付金额
+		downloads_used: integer().notNull().default(0),
+		downloads_max: integer().notNull().default(3), // 最多下载次数
+		expires_at: integer().notNull(), // 24h 后过期
+		created_at: integer().notNull()
+	},
+	(table) => [
+		index('dt_file_key_idx').on(table.file_key),
+		index('dt_expires_at_idx').on(table.expires_at)
 	]
 );

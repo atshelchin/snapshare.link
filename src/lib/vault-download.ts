@@ -118,6 +118,102 @@ export async function downloadAndDecrypt(
 	}
 }
 
+// Token-based download — fetches signed URLs from server per chunk
+export async function downloadAndDecryptWithToken(
+	token: string,
+	fileName: string,
+	encryptionKey: CryptoKey,
+	onProgress?: ProgressCallback,
+	abortSignal?: AbortSignal,
+	totalChunks?: number,
+	resumeExisting?: boolean
+): Promise<void> {
+	if (!totalChunks) throw new Error('totalChunks required for token download');
+
+	if (!isFileSystemAccessSupported()) {
+		throw new Error('File System Access API not supported. Please use Chrome or Edge.');
+	}
+
+	let handle: FileSystemFileHandle;
+	let startChunk = 1;
+
+	if (resumeExisting) {
+		handle = await pickExistingFile();
+		const existingFile = await handle.getFile();
+		const completedChunks = existingFile.size > 0 ? Math.floor(existingFile.size / PART_SIZE) : 0;
+		if (completedChunks > 0 && completedChunks < totalChunks) {
+			startChunk = completedChunks + 1;
+		}
+	} else {
+		handle = await pickNewFile(fileName);
+	}
+
+	// Start download (increments download counter on server)
+	const startResp = await fetch('/api/vault/download', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ token })
+	});
+	const startData = await startResp.json() as { success: boolean; data?: { partsTotal: number }; error?: string };
+	if (!startData.success) throw new Error(startData.error || 'Failed to start download');
+
+	const isResume = startChunk > 1;
+	const writable = await handle.createWritable({ keepExistingData: isResume });
+	if (isResume) {
+		const safeSize = (startChunk - 1) * PART_SIZE;
+		await writable.truncate(safeSize);
+		await writable.seek(safeSize);
+	}
+
+	const report = (done: number, status: DownloadProgress['status'], error?: string) => {
+		onProgress?.({
+			totalChunks: totalChunks!,
+			completedChunks: done,
+			percent: totalChunks! > 0 ? (done / totalChunks!) * 100 : 0,
+			status,
+			error
+		});
+	};
+
+	if (isResume) report(startChunk - 1, 'downloading');
+
+	try {
+		for (let i = startChunk; i <= totalChunks; i++) {
+			if (abortSignal?.aborted) {
+				await writable.close();
+				report(i - 1, 'cancelled');
+				return;
+			}
+
+			// Get signed URL for this chunk
+			const urlResp = await fetch('/api/vault/download', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ token, partNumber: i })
+			});
+			const urlData = await urlResp.json() as { success: boolean; data?: { url: string }; error?: string };
+			if (!urlData.success || !urlData.data) throw new Error(urlData.error || `Failed to get URL for chunk ${i}`);
+
+			const resp = await fetch(urlData.data.url, { signal: abortSignal });
+			if (!resp.ok) throw new Error(`Download chunk ${i} failed: HTTP ${resp.status}`);
+
+			const encryptedChunk = await resp.arrayBuffer();
+			const decrypted = await decryptFile(encryptionKey, encryptedChunk);
+			await writable.write(decrypted);
+
+			report(i, 'downloading');
+		}
+
+		await writable.close();
+		report(totalChunks, 'completed');
+	} catch (e) {
+		try { await writable.close(); } catch { /* ignore */ }
+		const errorMsg = e instanceof Error ? e.message : String(e);
+		report(startChunk - 1, 'failed', errorMsg);
+		throw e;
+	}
+}
+
 async function probeChunkCount(cdnUrl: string): Promise<number> {
 	const r1 = await fetch(`${cdnUrl}/1`, { method: 'HEAD' });
 	if (!r1.ok) throw new Error('No chunks found for this file');

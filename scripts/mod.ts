@@ -10,7 +10,7 @@
 //
 // Supports resume: re-run the same command to continue from where it left off.
 
-const PART_SIZE = 10 * 1024 * 1024; // 10MB
+const PART_SIZE = 100 * 1024 * 1024; // 100MB, must match server
 const MAX_RETRIES = 5;
 const RETRY_DELAY = 3000;
 
