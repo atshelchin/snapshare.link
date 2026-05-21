@@ -68,6 +68,7 @@
 	let abortController = $state<AbortController | null>(null);
 
 	let uploadStartTime = $state(0);
+	let uploadStatsTimer = $state<ReturnType<typeof setInterval> | null>(null);
 
 	let overallProgress = $derived(
 		partsTotal > 0 ? (partsDone / partsTotal) * 100 : 0
@@ -87,6 +88,15 @@
 		const eStr = eM > 0 ? `${eM}m${eS}s` : `${eS}s`;
 		const rStr = rM > 0 ? `${rM}m${rS}s` : `${rS}s`;
 		uploadTimeStr = `${eStr} / ~${rStr}`;
+	}
+
+	function startStatsTimer() {
+		stopStatsTimer();
+		uploadStatsTimer = setInterval(updateUploadStats, 1000);
+	}
+
+	function stopStatsTimer() {
+		if (uploadStatsTimer) { clearInterval(uploadStatsTimer); uploadStatsTimer = null; }
 	}
 
 	function formatSize(bytes: number): string {
@@ -261,6 +271,7 @@
 		uploadState = 'uploading';
 		error = '';
 		uploadStartTime = Date.now();
+		startStatsTimer();
 
 		// If resuming with existing fileKey, check which parts are already uploaded
 		if (fileKey && partsTotal > 0) {
@@ -305,6 +316,7 @@
 
 			if (data.data.alreadyUploaded) {
 				uploadState = 'completed';
+				stopStatsTimer();
 				onUploadComplete?.();
 				return;
 			}
@@ -387,6 +399,7 @@
 				const data = await resp.json();
 				if (data.success) {
 					uploadState = 'completed';
+					stopStatsTimer();
 					onUploadComplete?.();
 					clearUploadState();
 					return;
@@ -439,12 +452,13 @@
 		abortController = null;
 	}
 
-	function pauseUpload() { isPaused = true; abortController?.abort(); }
+	function pauseUpload() { isPaused = true; abortController?.abort(); stopStatsTimer(); }
 	async function resumeUpload() { isPaused = false; uploadState = 'uploading'; await uploadParts(); }
 
 	async function cancelUpload() {
 		isPaused = true;
 		abortController?.abort();
+		stopStatsTimer();
 		clearUploadState();
 		resetState();
 	}
