@@ -158,7 +158,7 @@
 		"authSuccess": "Authenticated",
 		"authFailed": "Authentication failed, please retry",
 		"prfNotSupported": "Your browser does not support the PRF extension. Please use Chrome 116+ or Edge 116+",
-		"webauthnNotSupported": "Your browser does not support WebAuthn",
+		"webauthnNotSupported": "Your browser does not support WebAuthn. Please use the latest version of Chrome, Edge, Safari, or Firefox",
 		"registerFirst": "First time use requires Passkey registration",
 		"register": "Register",
 		"registering": "Registering Passkey...",

@@ -158,7 +158,7 @@
 		"authSuccess": "验证成功",
 		"authFailed": "验证失败，请重试",
 		"prfNotSupported": "您的浏览器不支持 PRF 扩展，请使用 Chrome 116+ 或 Edge 116+",
-		"webauthnNotSupported": "您的浏览器不支持 WebAuthn",
+		"webauthnNotSupported": "您的浏览器不支持 WebAuthn，推荐使用 Chrome、Edge、Safari 或 Firefox 最新版本",
 		"registerFirst": "首次使用需要注册 Passkey",
 		"register": "注册",
 		"registering": "注册 Passkey 中...",
