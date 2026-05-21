@@ -208,15 +208,23 @@ Supports resume — re-run the same command to continue a partial download.
     const stat = await Deno.stat(filePath);
     console.log(`\n\n✅ Done: ${filePath} (${fmt(stat.size)})`);
 
-    // Merkle root verification (matches upload hash)
+    // Merkle root verification — stream 100MB chunks, constant memory
     console.log(`\n🔍 Computing Merkle root hash...`);
+    const verifyFile = await Deno.open(filePath, { read: true });
     const chunkHashes: Uint8Array[] = [];
-    const fileData = await Deno.readFile(filePath);
-    for (let offset = 0; offset < fileData.length; offset += PART_SIZE) {
-      const chunk = fileData.subarray(offset, Math.min(offset + PART_SIZE, fileData.length));
-      const h = new Uint8Array(await crypto.subtle.digest("SHA-256", chunk));
-      chunkHashes.push(h);
+    const readBuf = new Uint8Array(PART_SIZE);
+    while (true) {
+      let offset = 0;
+      while (offset < PART_SIZE) {
+        const n = await verifyFile.read(readBuf.subarray(offset));
+        if (n === null) break;
+        offset += n;
+      }
+      if (offset === 0) break;
+      const chunk = readBuf.subarray(0, offset);
+      chunkHashes.push(new Uint8Array(await crypto.subtle.digest("SHA-256", chunk)));
     }
+    verifyFile.close();
     const combined = new Uint8Array(chunkHashes.length * 32);
     chunkHashes.forEach((h, i) => combined.set(h, i * 32));
     const rootBuf = new Uint8Array(await crypto.subtle.digest("SHA-256", combined));
