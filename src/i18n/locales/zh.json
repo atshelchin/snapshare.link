@@ -150,6 +150,8 @@
 		"sessionExpired": "上传会话已过期，正在重新创建...",
 		"resumeDownload": "继续下载",
 		"resumeDownloadTip": "选择之前下载到一半的文件，从断点继续",
+		"copyCommandTip": "复制 Deno CLI 下载命令（支持断点续传）",
+		"commandCopied": "下载命令已复制！粘贴到终端运行即可。",
 		"vaultBrief": "7/30 天存储 · 端到端加密"
 	},
 	"privacy": {

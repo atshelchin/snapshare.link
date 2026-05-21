@@ -74,6 +74,8 @@
 		partsTotal > 0 ? ((partsDone + currentPartProgress / 100) / partsTotal) * 100 : 0
 	);
 
+	let uploadSpeedStr = $state('');
+
 	let timeEstimate = $derived(() => {
 		if (!uploadStartTime || partsDone === 0) return '';
 		const elapsed = (Date.now() - uploadStartTime) / 1000;
@@ -85,6 +87,9 @@
 		const remSec = remaining % 60;
 		const elapsedStr = elapsedMin > 0 ? `${elapsedMin}m${elapsedSec}s` : `${elapsedSec}s`;
 		const remStr = remMin > 0 ? `${remMin}m${remSec}s` : `${remSec}s`;
+		// Update speed (bytes per second based on parts done * partSize / elapsed)
+		const bytesPerSec = (partsDone * partSize) / elapsed;
+		uploadSpeedStr = formatSize(bytesPerSec) + '/s';
 		return `${elapsedStr} / ~${remStr}`;
 	});
 
@@ -581,7 +586,7 @@
 				<span>{i18n.t('vault.partProgress').replace('{done}', String(partsDone)).replace('{total}', String(partsTotal))}</span>
 			</div>
 			{#if timeEstimate()}
-				<div class="progress-time">⏱ {timeEstimate()}</div>
+				<div class="progress-time">⏱ {timeEstimate()} · {uploadSpeedStr}</div>
 			{/if}
 			{#if error}
 				<div class="vault-warning">{error}</div>

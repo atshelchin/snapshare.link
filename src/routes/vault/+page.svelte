@@ -147,9 +147,11 @@
 
 	let vaultFiles = $state<VaultFile[]>([]);
 	let isLoadingFiles = $state(false);
-	let downloadingFile = $state<string | null>(null); // fileKey of currently downloading
+	let downloadingFile = $state<string | null>(null);
 	let downloadProgress = $state<DownloadProgress | null>(null);
 	let downloadAbort = $state<AbortController | null>(null);
+	let downloadSpeed = $state('');
+	let downloadStartTime = 0;
 
 	async function loadFiles() {
 		if (!vaultChannelId) return;
@@ -205,6 +207,8 @@
 
 		downloadingFile = file.fileKey;
 		downloadProgress = null;
+		downloadSpeed = '';
+		downloadStartTime = Date.now();
 
 		const ctrl = new AbortController();
 		downloadAbort = ctrl;
@@ -218,7 +222,14 @@
 				cdnUrl,
 				fileName,
 				encryptionKey,
-				(progress) => { downloadProgress = { ...progress }; },
+				(progress) => {
+					downloadProgress = { ...progress };
+					const elapsed = (Date.now() - downloadStartTime) / 1000;
+					if (elapsed > 0 && progress.completedChunks > 0) {
+						const bytesPerSec = progress.completedChunks * 10 * 1024 * 1024 / elapsed;
+						downloadSpeed = `${formatSize(bytesPerSec)}/s`;
+					}
+				},
 				ctrl.signal,
 				file.partsTotal,
 				resumeExisting
@@ -228,11 +239,22 @@
 		} finally {
 			downloadingFile = null;
 			downloadAbort = null;
+			downloadSpeed = '';
 		}
 	}
 
 	function cancelDownload() {
 		downloadAbort?.abort();
+	}
+
+	async function copyDownloadCommand(file: VaultFile) {
+		if (!encryptionKey) return;
+		const keyStr = await exportKeyToBase64Url(encryptionKey);
+		const name = file.originalName || file.fileHash.slice(0, 12) + '.bin';
+		const url = `https://snapshare.link/d#key=${keyStr}&file=${encodeURIComponent(file.fileKey)}&name=${encodeURIComponent(name)}&parts=${file.partsTotal}&plan=${file.plan}&hash=${file.fileHash}`;
+		const cmd = `deno run -A jsr:@snapshare/download "${url}"`;
+		await navigator.clipboard.writeText(cmd);
+		alert(i18n.t('vault.commandCopied'));
 	}
 
 	let resumeOrderId = $state('');
@@ -326,11 +348,19 @@
 										{i18n.t('vault.retry')}
 									</button>
 								{:else if downloadingFile === file.fileKey && downloadProgress}
-									<div class="download-progress-mini">
-										<span>{Math.round(downloadProgress.percent)}%</span>
-										<button class="btn btn-secondary btn-small" onclick={cancelDownload}>
-											{i18n.t('vault.cancel')}
-										</button>
+									<div class="download-progress-inline">
+										<div class="download-progress-top">
+											<span>{Math.round(downloadProgress.percent)}% ({downloadProgress.completedChunks}/{downloadProgress.totalChunks})</span>
+											<button class="btn btn-secondary btn-small" onclick={cancelDownload}>
+												{i18n.t('vault.cancel')}
+											</button>
+										</div>
+										<div class="progress-bar-container">
+											<div class="progress-bar" style="width: {downloadProgress.percent}%"></div>
+										</div>
+										{#if downloadSpeed}
+											<div class="download-speed">{downloadSpeed}</div>
+										{/if}
 									</div>
 								{:else}
 									<div class="download-buttons">
@@ -349,6 +379,13 @@
 										>
 											{i18n.t('vault.resumeDownload')}
 										</button>
+										<button
+											class="btn btn-secondary btn-small"
+											onclick={() => copyDownloadCommand(file)}
+											title={i18n.t('vault.copyCommandTip')}
+										>
+											CLI
+										</button>
 									</div>
 								{/if}
 							</div>
@@ -357,17 +394,6 @@
 				</div>
 			{/if}
 
-			{#if downloadProgress && downloadProgress.status === 'downloading'}
-				<div class="download-progress-bar">
-					<div class="progress-header">
-						<span>{i18n.t('vault.downloading')}</span>
-						<span>{Math.round(downloadProgress.percent)}% ({downloadProgress.completedChunks}/{downloadProgress.totalChunks})</span>
-					</div>
-					<div class="progress-bar-container">
-						<div class="progress-bar" style="width: {downloadProgress.percent}%"></div>
-					</div>
-				</div>
-			{/if}
 		</div>
 	</div>
 {:else}
@@ -690,29 +716,26 @@
 	.status-pending { color: var(--color-primary); font-weight: var(--font-medium); }
 	.download-buttons { display: flex; gap: var(--space-1); }
 
-	.download-progress-mini {
+	.download-progress-inline {
 		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		width: 100%;
+	}
+
+	.download-progress-top {
+		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		gap: var(--space-2);
 		font-size: var(--text-sm);
 		color: var(--color-primary);
 		font-weight: var(--font-semibold);
 	}
 
-	.download-progress-bar {
-		margin-top: var(--space-4);
-		padding: var(--space-4);
-		background: var(--color-panel-1);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-	}
-
-	.progress-header {
-		display: flex;
-		justify-content: space-between;
-		font-size: var(--text-sm);
+	.download-speed {
+		font-size: var(--text-xs);
 		color: var(--color-muted-foreground);
-		margin-bottom: var(--space-2);
+		text-align: right;
 	}
 
 	.progress-bar-container {

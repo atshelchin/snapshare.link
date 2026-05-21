@@ -150,6 +150,8 @@
 		"sessionExpired": "Upload session expired, recreating...",
 		"resumeDownload": "Resume",
 		"resumeDownloadTip": "Select a partially downloaded file to continue from where it left off",
+		"copyCommandTip": "Copy Deno CLI download command (supports resume)",
+		"commandCopied": "Download command copied! Paste it in your terminal.",
 		"vaultBrief": "7/30 days · E2E encrypted"
 	},
 	"privacy": {
