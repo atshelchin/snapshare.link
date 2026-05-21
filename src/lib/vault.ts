@@ -38,6 +38,7 @@ function createS3Client(env: VaultEnv): S3Client {
 			accessKeyId: env.ACCESS_KEY_ID,
 			secretAccessKey: env.SECRET_ACCESS_KEY
 		},
+		forcePathStyle: true,
 		requestChecksumCalculation: 'WHEN_REQUIRED',
 		responseChecksumValidation: 'WHEN_REQUIRED',
 	});
@@ -47,9 +48,8 @@ function getBucketName(_env: VaultEnv, plan: StoragePlan): string {
 	return plan === '7d' ? 'paid-snapshare-7days' : 'paid-snapshare';
 }
 
-function getR2Endpoint(env: VaultEnv, plan: StoragePlan): string {
-	const bucket = getBucketName(env, plan);
-	return `https://${bucket}.${env.ACCOUNT_ID}.r2.cloudflarestorage.com`;
+function getR2Endpoint(env: VaultEnv): string {
+	return `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com`;
 }
 
 // Calculate price in USDC
@@ -91,14 +91,15 @@ export async function createMultipartUpload(
 	const now = new Date();
 	const prefix = now.toISOString().slice(0, 10);
 	const fileKey = `vault/${prefix}/${uuid}`;
-	const endpoint = getR2Endpoint(env, plan);
+	const endpoint = getR2Endpoint(env);
+	const bucket = getBucketName(env, plan);
 
 	const signer = new AwsV4Signer({
 		accessKeyId: env.ACCESS_KEY_ID,
 		secretAccessKey: env.SECRET_ACCESS_KEY,
 		region: 'auto',
 		service: 's3',
-		url: `${endpoint}/${fileKey}?uploads`,
+		url: `${endpoint}/${bucket}/${fileKey}?uploads`,
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/octet-stream',
@@ -153,7 +154,8 @@ export async function completeMultipartUpload(
 	parts: { partNumber: number; etag: string }[],
 	plan: StoragePlan
 ): Promise<void> {
-	const endpoint = getR2Endpoint(env, plan);
+	const endpoint = getR2Endpoint(env);
+	const bucket = getBucketName(env, plan);
 	const partsXml = parts
 		.map((p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${p.etag}</ETag></Part>`)
 		.join('');
@@ -164,7 +166,7 @@ export async function completeMultipartUpload(
 		secretAccessKey: env.SECRET_ACCESS_KEY,
 		region: 'auto',
 		service: 's3',
-		url: `${endpoint}/${fileKey}?uploadId=${uploadId}`,
+		url: `${endpoint}/${bucket}/${fileKey}?uploadId=${uploadId}`,
 		method: 'POST',
 		headers: { 'Content-Type': 'application/xml' },
 		body
@@ -190,14 +192,15 @@ export async function abortMultipartUpload(
 	uploadId: string,
 	plan: StoragePlan
 ): Promise<void> {
-	const endpoint = getR2Endpoint(env, plan);
+	const endpoint = getR2Endpoint(env);
+	const bucket = getBucketName(env, plan);
 
 	const signer = new AwsV4Signer({
 		accessKeyId: env.ACCESS_KEY_ID,
 		secretAccessKey: env.SECRET_ACCESS_KEY,
 		region: 'auto',
 		service: 's3',
-		url: `${endpoint}/${fileKey}?uploadId=${uploadId}`,
+		url: `${endpoint}/${bucket}/${fileKey}?uploadId=${uploadId}`,
 		method: 'DELETE'
 	});
 

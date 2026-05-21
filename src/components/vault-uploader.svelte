@@ -317,28 +317,21 @@
 					break;
 				} catch (e) {
 					if (isPaused) { uploadState = 'paused'; return; }
-					const msg = String(e);
-					// Upload session expired — recreate and restart from part 1
-					if (msg.includes('HTTP 404') || msg.includes('404')) {
-						error = i18n.t('vault.sessionExpired');
-						try {
-							await recreateUploadSession();
-							// Restart the loop from part 1
-							partNum = partsDone; // will become partsDone+1 on next iteration
-							break;
-						} catch (recreateErr) {
-							error = `Session recreate failed: ${recreateErr}`;
-							uploadState = 'failed';
-							return;
-						}
-					}
 					if (attempt < MAX_RETRIES) {
 						error = `Part ${partNum} failed (attempt ${attempt}/${MAX_RETRIES}), retrying...`;
 						await new Promise(r => setTimeout(r, RETRY_DELAY * attempt));
 					} else {
-						error = `Part ${partNum} failed after ${MAX_RETRIES} attempts: ${e}`;
-						uploadState = 'failed';
-						return;
+						// All retries exhausted — try recreating the upload session
+						error = i18n.t('vault.sessionExpired');
+						try {
+							await recreateUploadSession();
+							partNum = partsDone; // will become partsDone+1 on next iteration
+							break;
+						} catch {
+							error = `Part ${partNum} failed after ${MAX_RETRIES} attempts: ${e}`;
+							uploadState = 'failed';
+							return;
+						}
 					}
 				}
 			}
@@ -488,23 +481,18 @@
 	function clearUploadState() { localStorage.removeItem(`vault-upload:${channelId}`); }
 
 	// Restore in-progress upload after page refresh
+	// Only restore orderId — server will handle session creation/resume
 	function loadUploadState() {
 		const saved = localStorage.getItem(`vault-upload:${channelId}`);
 		if (!saved) return;
 		try {
 			const state = JSON.parse(saved);
-			if (state.fileKey && state.uploadId && state.partsDone < state.partsTotal) {
-				fileKey = state.fileKey;
-				uploadId = state.uploadId;
-				partsTotal = state.partsTotal;
-				partsDone = state.partsDone;
-				completedParts = state.completedParts || [];
+			if (state.orderId && state.partsDone < state.partsTotal) {
+				orderId = state.orderId;
 				selectedPlan = state.plan || '7d';
-				orderId = state.orderId || '';
 				uploadState = 'paused';
 				error = i18n.t('vault.selectFileToResume');
 			} else {
-				// Stale state, clear it
 				clearUploadState();
 			}
 		} catch {
