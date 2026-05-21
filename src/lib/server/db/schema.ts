@@ -37,7 +37,7 @@ export const paidFiles = sqliteTable(
 		encrypted: integer().notNull().default(0), // 0=明文 1=加密
 		payment_tx: text(), // 链上交易哈希
 		payment_amount: text(), // 支付金额 (USDC, 如 "4.50")
-		download_price: text(), // 下载价格 (USDC), 上传价格的 1/10, 最低 0.01
+		download_price: text(), // 下载价格 (USDC), $0.01/GB 不足1GB按1GB算
 		upload_id: text(), // legacy, unused
 		upload_status: text().notNull().default('pending'), // pending | uploading | completed | failed
 		parts_total: integer().default(0),

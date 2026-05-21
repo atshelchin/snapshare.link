@@ -24,7 +24,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return Response.json({ success: false, error: 'File not found' }, { status: 404 });
 		}
 
-		const downloadPrice = file[0].download_price || '0.01';
+		// $0.01/GB, min 1GB
+		const downloadPrice = file[0].download_price
+			|| (Math.max(1, Math.ceil(file[0].file_size / (1024 * 1024 * 1024))) * 0.01).toFixed(2);
 
 		// Generate payment address
 		const orderId = nanoid();

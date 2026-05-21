@@ -118,7 +118,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			encrypted: encrypted ? 1 : 0,
 			payment_tx: payment.txHash || orderId,
 			payment_amount: order.amount,
-			download_price: Math.max(0.01, parseFloat(order.amount) / 10).toFixed(2),
+			download_price: (Math.max(1, Math.ceil(fileSize / (1024 * 1024 * 1024))) * 0.01).toFixed(2),
 			upload_status: 'uploading',
 			parts_total: partsTotal,
 			parts_done: 0,
