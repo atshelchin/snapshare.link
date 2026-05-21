@@ -6,7 +6,7 @@
 	import CopyButton from './copy-button.svelte';
 
 	const i18n = useI18n();
-	const PART_SIZE = 100 * 1024 * 1024;
+	const PART_SIZE = 10 * 1024 * 1024; // 10MB, must match server
 
 	type StoragePlan = '7d' | '30d';
 
@@ -24,6 +24,10 @@
 		if (resumeOrderId && resumeOrderId !== lastResumeOrderId) {
 			lastResumeOrderId = resumeOrderId;
 			selectedFile = null;
+			fileKey = '';
+			uploadId = '';
+			completedParts = [];
+			partsDone = 0;
 			orderId = resumeOrderId;
 			uploadState = 'failed';
 			error = resumeFileName

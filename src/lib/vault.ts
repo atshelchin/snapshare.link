@@ -12,7 +12,7 @@ import type { Env } from '$lib';
 import { AwsV4Signer } from 'aws4fetch';
 
 // 100MB per part
-export const PART_SIZE = 100 * 1024 * 1024;
+export const PART_SIZE = 10 * 1024 * 1024; // 10MB per part (R2 minimum is 5MB)
 
 // Max file size: 4TB
 export const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024 * 1024;

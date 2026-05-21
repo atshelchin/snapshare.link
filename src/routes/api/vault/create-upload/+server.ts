@@ -92,28 +92,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			);
 		}
 
-		// Check if there's an existing incomplete upload for this order (resume)
-		const existingUpload = await db
-			.select()
-			.from(paidFiles)
-			.where(eq(paidFiles.payment_tx, payment.txHash || orderId))
-			.limit(1)
-			.all();
-
-		if (existingUpload.length > 0 && existingUpload[0].upload_status !== 'completed') {
-			return Response.json({
-				success: true,
-				data: {
-					fileKey: existingUpload[0].file_key,
-					uploadId: existingUpload[0].upload_id,
-					partsTotal: existingUpload[0].parts_total,
-					partsDone: existingUpload[0].parts_done,
-					expiresAt: existingUpload[0].expires_at,
-					resumed: true
-				}
-			});
-		}
-
 		const userIP =
 			request.headers.get('CF-Connecting-IP') ||
 			request.headers.get('X-Forwarded-For')?.split(',')[0] ||
