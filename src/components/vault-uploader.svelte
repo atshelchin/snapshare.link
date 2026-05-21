@@ -635,12 +635,12 @@
 			<button class="plan-option" class:active={selectedPlan === '7d'} onclick={() => switchPlan('7d')}>
 				<span class="plan-days">7 {i18n.t('vault.days')}</span>
 				<span class="plan-price">{i18n.t('vault.uploadPrice')}: $0.01/GB</span>
-				<span class="plan-price plan-price-download">{i18n.t('vault.downloadPriceLabel')}: $0.001/GB ({i18n.t('vault.downloadMinPrice')})</span>
+				<span class="plan-price plan-price-download">{i18n.t('vault.downloadPriceLabel')}: $0.01/GB</span>
 			</button>
 			<button class="plan-option" class:active={selectedPlan === '30d'} onclick={() => switchPlan('30d')}>
 				<span class="plan-days">30 {i18n.t('vault.days')}</span>
 				<span class="plan-price">{i18n.t('vault.uploadPrice')}: $0.1/GB</span>
-				<span class="plan-price plan-price-download">{i18n.t('vault.downloadPriceLabel')}: $0.01/GB ({i18n.t('vault.downloadMinPrice')})</span>
+				<span class="plan-price plan-price-download">{i18n.t('vault.downloadPriceLabel')}: $0.01/GB</span>
 			</button>
 		</div>
 
