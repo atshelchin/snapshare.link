@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { useI18n } from '@shelchin/i18n/svelte';
 	import { encryptFile } from '$lib/crypto';
-	// Payment address is per-order, fetched from server
 	import QRCode from './qr-code.svelte';
 	import CopyButton from './copy-button.svelte';
 
@@ -98,25 +97,21 @@
 		return (bytes / Math.pow(k, i)).toFixed(i > 2 ? 2 : 0) + ' ' + sizes[i];
 	}
 
-	// Compute SHA-256 hash of file (streaming, low memory)
+	// Merkle root hash — hash each chunk, then hash all chunk hashes together
+	// Constant memory, supports per-chunk verification
 	async function computeFileHash(file: File): Promise<string> {
-		// For files > 256MB, hash first+last 128MB for speed
-		if (file.size > 256 * 1024 * 1024) {
-			const head = await file.slice(0, 128 * 1024 * 1024).arrayBuffer();
-			const tail = await file.slice(-128 * 1024 * 1024).arrayBuffer();
-			const combined = new Uint8Array(head.byteLength + tail.byteLength + 8);
-			combined.set(new Uint8Array(head), 0);
-			combined.set(new Uint8Array(tail), head.byteLength);
-			// Include file size in hash for uniqueness
-			new DataView(combined.buffer).setBigUint64(head.byteLength + tail.byteLength, BigInt(file.size));
-			const hash = await crypto.subtle.digest('SHA-256', combined);
-			return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+		const chunkHashes: Uint8Array[] = [];
+		for (let offset = 0; offset < file.size; offset += partSize) {
+			const slice = file.slice(offset, Math.min(offset + partSize, file.size));
+			const buf = await slice.arrayBuffer();
+			const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+			chunkHashes.push(hash);
 		}
-
-		// Small files: hash entirely
-		const buffer = await file.arrayBuffer();
-		const hash = await crypto.subtle.digest('SHA-256', buffer);
-		return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+		// Merkle root: hash all chunk hashes concatenated
+		const combined = new Uint8Array(chunkHashes.length * 32);
+		chunkHashes.forEach((h, i) => combined.set(h, i * 32));
+		const root = new Uint8Array(await crypto.subtle.digest('SHA-256', combined));
+		return Array.from(root).map(b => b.toString(16).padStart(2, '0')).join('');
 	}
 
 	function handleFileSelect(event: Event) {
