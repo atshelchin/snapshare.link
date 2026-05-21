@@ -5,7 +5,29 @@
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 
-const BASE_RPC = 'https://mainnet.base.org';
+// Multiple RPC endpoints for reliability
+const BASE_RPCS = [
+	'https://mainnet.base.org',
+	'https://base.llamarpc.com',
+	'https://base.drpc.org',
+];
+
+async function rpcCall(body: object): Promise<unknown> {
+	for (const rpc of BASE_RPCS) {
+		try {
+			const resp = await fetch(rpc, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (resp.ok) {
+				const data = await resp.json();
+				if (data && typeof data === 'object' && 'result' in (data as Record<string, unknown>)) return data;
+			}
+		} catch { /* try next */ }
+	}
+	throw new Error('All RPC endpoints failed');
+}
 
 // USDC on Base
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
@@ -52,33 +74,24 @@ function toChecksumAddress(address: string): string {
 // Check if a specific address has received USDC payment of at least the expected amount
 export async function checkPaymentToAddress(
 	receiverAddress: string,
-	expectedAmountUSDC: string,
-	rpcUrl = BASE_RPC
+	expectedAmountUSDC: string
 ): Promise<{ paid: boolean; txHash: string; error?: string }> {
 	try {
-		// Get USDC balance of the receiver address
 		const balanceData = encodeBalanceOfCall(receiverAddress);
 
-		const resp = await fetch(rpcUrl, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: 1,
-				method: 'eth_call',
-				params: [{ to: USDC_ADDRESS, data: balanceData }, 'latest']
-			})
-		});
+		const data = await rpcCall({
+			jsonrpc: '2.0', id: 1,
+			method: 'eth_call',
+			params: [{ to: USDC_ADDRESS, data: balanceData }, 'latest']
+		}) as { result?: string };
 
-		const data = await resp.json();
 		const balance = BigInt(data.result || '0x0');
 		const expectedAmount = BigInt(
 			Math.round(parseFloat(expectedAmountUSDC) * 10 ** USDC_DECIMALS)
 		);
 
 		if (balance >= expectedAmount) {
-			// Find the tx hash from recent Transfer events to this address
-			const txHash = await findTransferTx(receiverAddress, rpcUrl);
+			const txHash = await findTransferTx(receiverAddress);
 			return { paid: true, txHash };
 		}
 
@@ -96,40 +109,28 @@ function encodeBalanceOfCall(address: string): string {
 }
 
 // Find recent USDC Transfer tx to a specific address
-async function findTransferTx(receiverAddress: string, rpcUrl: string): Promise<string> {
+async function findTransferTx(receiverAddress: string): Promise<string> {
 	try {
-		const latestResp = await fetch(rpcUrl, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] })
-		});
-		const latestData = await latestResp.json();
+		const latestData = await rpcCall({
+			jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: []
+		}) as { result: string };
 		const latestBlock = parseInt(latestData.result, 16);
-		const fromBlock = Math.max(0, latestBlock - 1000); // ~30 min on Base
+		const fromBlock = Math.max(0, latestBlock - 1000);
 
 		const transferTopic =
 			'0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 		const receiverTopic = '0x' + receiverAddress.slice(2).toLowerCase().padStart(64, '0');
 
-		const logsResp = await fetch(rpcUrl, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: 2,
-				method: 'eth_getLogs',
-				params: [
-					{
-						address: USDC_ADDRESS,
-						topics: [transferTopic, null, receiverTopic],
-						fromBlock: '0x' + fromBlock.toString(16),
-						toBlock: 'latest'
-					}
-				]
-			})
-		});
-
-		const logsData = await logsResp.json();
+		const logsData = await rpcCall({
+			jsonrpc: '2.0', id: 2,
+			method: 'eth_getLogs',
+			params: [{
+				address: USDC_ADDRESS,
+				topics: [transferTopic, null, receiverTopic],
+				fromBlock: '0x' + fromBlock.toString(16),
+				toBlock: 'latest'
+			}]
+		}) as { result?: { transactionHash: string }[] };
 		const logs = logsData.result || [];
 		if (logs.length > 0) {
 			return logs[logs.length - 1].transactionHash;

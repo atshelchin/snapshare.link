@@ -39,6 +39,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			data: {
 				paid: result.paid,
 				txHash: result.txHash,
+				error: result.error,
 				paymentAddress: order.paymentAddress,
 				amount: order.amount
 			}
