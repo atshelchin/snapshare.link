@@ -215,7 +215,7 @@ export function uploadWithPUT(
 	onprogress?: (event: ProgressEvent) => void,
 	onerror?: () => void,
 	onabort?: () => void
-) {
+): XMLHttpRequest {
 	const uploadXHR = new XMLHttpRequest();
 
 	// 监听上传进度
@@ -262,6 +262,8 @@ export function uploadWithPUT(
 	uploadXHR.open('PUT', url);
 	uploadXHR.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
 	uploadXHR.send(file);
+
+	return uploadXHR;
 }
 
 export async function addFile(channel_id: string, file_key: string, file_name: string) {

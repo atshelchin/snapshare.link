@@ -64,7 +64,10 @@
 			"uploadError": "上传过程中发生错误",
 			"networkError": "网络错误",
 			"uploadCanceled": "上传已取消",
+			"uploadTimeout": "上传长时间无进展，请重试",
 			"addFileFailed": "添加文件记录失败",
+			"retry": "重试",
+			"filesFailed": "个文件上传失败，可逐个重试",
 			"maxFiles": "最多只能上传 100 个文件，当前已选择",
 			"filesSelected": "个",
 			"pleaseDelete": "请删除"
@@ -77,6 +80,8 @@
 		},
 		"fileList": {
 			"title": "频道文件列表",
+			"stats": "频道文件统计",
+			"storageUsed": "已占用",
 			"loading": "加载中...",
 			"empty": "暂无文件",
 			"download": "下载"

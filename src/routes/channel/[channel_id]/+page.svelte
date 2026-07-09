@@ -18,11 +18,15 @@
 	import ImageLightbox from '../../../components/image-lightbox.svelte';
 	import { useI18n } from '@shelchin/i18n/svelte';
 	import { importKeyFromBase64Url, encryptFile, encryptString } from '$lib/crypto';
+	import type { UploadUrlData } from '$lib';
 
 	let { params } = $props();
 	const i18n = useI18n();
 	const channel_id = params.channel_id;
 	const maxFileSizeLabel = formatUploadLimitSize();
+	const MAX_PARALLEL_UPLOADS = 4;
+	const MAX_UPLOAD_ATTEMPTS = 3;
+	const UPLOAD_IDLE_TIMEOUT_MS = 45_000;
 
 	// 隐私频道：从 URL hash 解析加密密钥和创建者名字
 	let encryptionKey = $state<CryptoKey | null>(null);
@@ -64,10 +68,11 @@
 	let fileInput = $state<HTMLInputElement>();
 	let selectedFiles = $state<{ file: File; error?: string }[]>([]);
 	let validationError = $state('');
-	let uploadQueue = $state<UploadProgress[]>([]);
+	let uploadQueue = $state<UploadQueueItem[]>([]);
 	let isUploading = $state(false);
 	let rateLimitError = $state('');
 	let isDragOver = $state(false);
+	let clearUploadQueueTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// 文件列表状态
 	interface FileItem {
@@ -79,12 +84,68 @@
 		created_at: number;
 	}
 
+	interface ChannelFileStats {
+		fileCount: number;
+		totalSize: number;
+	}
+
+	interface ChannelStreamEvent {
+		type: 'initial' | 'update' | 'error';
+		data?: FileItem[];
+		stats?: ChannelFileStats;
+		error?: string;
+	}
+
+	type UploadQueueItem = UploadProgress & {
+		id: string;
+		uploadFile: File;
+		uploadData: UploadUrlData;
+		storedName: string;
+		storedType: string;
+		storedSize: number;
+	};
+
 	let filesList = $state<FileItem[]>([]);
+	let fileStats = $state<ChannelFileStats>({ fileCount: 0, totalSize: 0 });
 	let isLoadingFiles = $state(true);
 	let eventSource: EventSource | null = null;
 
 	// 图片放大状态
 	let lightboxImageUrl = $state<string | null>(null);
+
+	function formatStorageSize(bytes: number): string {
+		if (!bytes || bytes <= 0) return '0 B';
+
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+		const value = bytes / Math.pow(k, i);
+		const precision = i === 0 ? 0 : value >= 10 ? 1 : 2;
+		return `${value.toFixed(precision).replace(/\.0+$/, '')} ${sizes[i]}`;
+	}
+
+	function getFallbackStats(fileItems: FileItem[]): ChannelFileStats {
+		return {
+			fileCount: fileItems.length,
+			totalSize: fileItems.reduce((total, file) => total + (file.file_size || 0), 0)
+		};
+	}
+
+	function normalizeFileStats(stats: ChannelFileStats | undefined, fallback: FileItem[]) {
+		if (!stats) return getFallbackStats(fallback);
+
+		return {
+			fileCount: Number(stats.fileCount || 0),
+			totalSize: Number(stats.totalSize || 0)
+		};
+	}
+
+	function addToFileStats(fileSize: number | null | undefined) {
+		fileStats = {
+			fileCount: fileStats.fileCount + 1,
+			totalSize: fileStats.totalSize + (fileSize || 0)
+		};
+	}
 
 	// 使用 SSE 加载文件列表
 	$effect(() => {
@@ -95,16 +156,18 @@
 
 		eventSource.onmessage = (event) => {
 			try {
-				const data = JSON.parse(event.data);
+				const data = JSON.parse(event.data) as ChannelStreamEvent;
 
 				if (data.type === 'initial') {
 					filesList = data.data || [];
+					fileStats = normalizeFileStats(data.stats, filesList);
 					isLoadingFiles = false;
 				} else if (data.type === 'update') {
 					const newFiles = data.data || [];
 					const existingKeys = new Set(filesList.map((f) => f.file_key));
 					const uniqueNewFiles = newFiles.filter((f: FileItem) => !existingKeys.has(f.file_key));
 					filesList = [...uniqueNewFiles, ...filesList];
+					fileStats = normalizeFileStats(data.stats, filesList);
 				} else if (data.type === 'error') {
 					console.error('SSE error:', data.error);
 					isLoadingFiles = false;
@@ -218,142 +281,311 @@
 		return { encryptedFile, encryptedName };
 	}
 
+	function createUploadQueueId(file: File, index: number): string {
+		return `${Date.now()}-${index}-${file.name}-${file.size}-${file.lastModified}`;
+	}
+
+	function setUploadQueueItem(index: number, patch: Partial<UploadQueueItem>) {
+		const current = uploadQueue[index];
+		if (!current) return;
+
+		uploadQueue[index] = { ...current, ...patch };
+	}
+
+	function getUploadRequestError(urlsData: Awaited<ReturnType<typeof genUploadUrls>>): string {
+		if (urlsData.success) return '';
+
+		const limit = urlsData.limit?.hour || urlsData.limit?.day || urlsData.limit?.global;
+		if (limit) {
+			const currentMB = Math.round(limit.current / 1024 / 1024);
+			const maxMB = Math.round(limit.max / 1024 / 1024);
+			const message = urlsData.error || i18n.t('channel.upload.requestFailed');
+			return `${i18n.t('channel.upload.rateLimitError')}: ${message}. ${currentMB}MB / ${maxMB}MB`;
+		}
+
+		return urlsData.error || i18n.t('channel.upload.requestFailed');
+	}
+
+	function getUploadErrorMessage(error: unknown): string {
+		return error instanceof Error ? error.message : i18n.t('channel.upload.uploadError');
+	}
+
+	function delay(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	function scheduleClearSuccessfulUploadQueue() {
+		if (clearUploadQueueTimer) clearTimeout(clearUploadQueueTimer);
+
+		clearUploadQueueTimer = setTimeout(() => {
+			if (!uploadQueue.length || uploadQueue.some((item) => item.status !== 'success')) return;
+
+			selectedFiles = [];
+			uploadQueue = [];
+			rateLimitError = '';
+			if (fileInput) fileInput.value = '';
+		}, 2000);
+	}
+
+	function updateFilesListAfterUpload(item: UploadQueueItem): boolean {
+		if (filesList.some((file) => file.file_key === item.uploadData.fileKey)) return false;
+
+		filesList = [
+			{
+				channel_id,
+				file_key: item.uploadData.fileKey,
+				file_name: item.storedName,
+				file_type: item.storedType,
+				file_size: item.storedSize,
+				created_at: Date.now()
+			},
+			...filesList
+		];
+
+		return true;
+	}
+
+	async function processUploadQueue(indices: number[]) {
+		let nextIndex = 0;
+		const workerCount = Math.min(MAX_PARALLEL_UPLOADS, indices.length);
+
+		await Promise.all(
+			Array.from({ length: workerCount }, async () => {
+				while (nextIndex < indices.length) {
+					const index = indices[nextIndex++];
+					const item = uploadQueue[index];
+					if (!item || item.status === 'success') continue;
+
+					await uploadSingleFile(index);
+				}
+			})
+		);
+
+		isUploading = false;
+
+		const failedCount = uploadQueue.filter((item) => item.status === 'error').length;
+		if (failedCount > 0) {
+			rateLimitError = `${failedCount} ${i18n.t('channel.upload.filesFailed')}`;
+			return;
+		}
+
+		scheduleClearSuccessfulUploadQueue();
+	}
+
 	// 分享文件
 	async function shareFiles() {
 		const validFiles = selectedFiles.filter((item) => !item.error).map((item) => item.file);
 		if (validFiles.length === 0) return;
 
+		if (clearUploadQueueTimer) clearTimeout(clearUploadQueueTimer);
 		isUploading = true;
 		rateLimitError = '';
-
-		// 初始化上传队列（显示原始文件名给用户看）
-		uploadQueue = validFiles.map((file) => ({
-			file,
-			status: 'waiting' as const,
-			progress: 0
-		}));
+		uploadQueue = [];
 
 		try {
-			// 隐私模式：加密所有文件
 			let filesToUpload: File[];
-			let encryptedNames: string[];
+			let storedNames: string[];
 
 			if (isPrivacyMode && encryptionKey) {
-				uploadQueue.forEach((_, i) => {
-					uploadQueue[i].status = 'waiting';
-				});
 				const encrypted = await Promise.all(
-					validFiles.map((f) => encryptFileForUpload(encryptionKey!, f))
+					validFiles.map((file) => encryptFileForUpload(encryptionKey!, file))
 				);
-				filesToUpload = encrypted.map((e) => e.encryptedFile);
-				encryptedNames = encrypted.map((e) => e.encryptedName);
+				filesToUpload = encrypted.map((item) => item.encryptedFile);
+				storedNames = encrypted.map((item) => item.encryptedName);
 			} else {
 				filesToUpload = validFiles;
-				encryptedNames = validFiles.map((f) => f.name);
+				storedNames = validFiles.map((file) => file.name);
 			}
 
-			const fileSizes = filesToUpload.map((f) => f.size);
+			const fileSizes = filesToUpload.map((file) => file.size);
 			const urlsData = await genUploadUrls(fileSizes);
 
 			if (!urlsData.success) {
-				const limit = urlsData.limit?.hour || urlsData.limit?.day || urlsData.limit?.global;
-				if (limit) {
-					const currentMB = Math.round(limit.current / 1024 / 1024);
-					const maxMB = Math.round(limit.max / 1024 / 1024);
-					rateLimitError = `${i18n.t('channel.upload.rateLimitError')}: ${urlsData.error}. ${currentMB}MB / ${maxMB}MB`;
-				} else {
-					rateLimitError = urlsData.error || i18n.t('channel.upload.requestFailed');
-				}
-				uploadQueue = [];
+				rateLimitError = getUploadRequestError(urlsData);
 				isUploading = false;
 				return;
 			}
 
-			const uploadPromises = filesToUpload.map((file, index) =>
-				uploadSingleFile(
-					file,
-					urlsData.data[index],
-					index,
-					encryptedNames[index],
-					isPrivacyMode ? 'application/octet-stream' : validFiles[index].type,
-					isPrivacyMode ? filesToUpload[index].size : validFiles[index].size
-				)
-			);
+			uploadQueue = validFiles.map((file, index) => ({
+				id: createUploadQueueId(file, index),
+				file,
+				uploadFile: filesToUpload[index],
+				uploadData: urlsData.data[index],
+				storedName: storedNames[index],
+				storedType: isPrivacyMode ? 'application/octet-stream' : file.type,
+				storedSize: isPrivacyMode ? filesToUpload[index].size : file.size,
+				status: 'waiting' as const,
+				progress: 0,
+				attempts: 0,
+				maxAttempts: MAX_UPLOAD_ATTEMPTS
+			}));
 
-			await Promise.all(uploadPromises);
+			await processUploadQueue(uploadQueue.map((_, index) => index));
 		} catch (error) {
 			console.error(i18n.t('channel.upload.uploadError'), error);
-			rateLimitError = i18n.t('channel.upload.uploadError');
-		} finally {
+			rateLimitError = getUploadErrorMessage(error);
 			isUploading = false;
-			setTimeout(() => {
-				selectedFiles = [];
-				uploadQueue = [];
-				if (fileInput) fileInput.value = '';
-			}, 2000);
 		}
 	}
 
-	// 上传单个文件
-	async function uploadSingleFile(
-		file: File,
-		uploadData: { url: string; fileKey: string },
-		index: number,
-		fileName: string,
-		fileType: string,
-		fileSize: number
-	) {
-		return new Promise<void>((resolve, reject) => {
-			uploadQueue[index].status = 'uploading';
+	async function retryUploadItem(index: number) {
+		const item = uploadQueue[index];
+		if (!item || item.status !== 'error' || isUploading) return;
 
-			const onload = async (xhr: XMLHttpRequest) => {
-				if (xhr.status >= 200 && xhr.status < 300) {
-					uploadQueue[index].status = 'success';
-					uploadQueue[index].progress = 100;
+		isUploading = true;
+		rateLimitError = '';
+		setUploadQueueItem(index, {
+			status: 'waiting',
+			progress: 0,
+			error: undefined,
+			attempts: 0
+		});
 
-					try {
-						await addFile(channel_id, uploadData.fileKey, fileName);
-						filesList = [
-							{
-								channel_id,
-								file_key: uploadData.fileKey,
-								file_name: fileName,
-								file_type: fileType,
-								file_size: fileSize,
-								created_at: Date.now()
-							},
-							...filesList
-						];
-					} catch (err) {
-						console.error(i18n.t('channel.upload.addFileFailed'), err);
-					}
-					resolve();
+		const urlsData = await genUploadUrls([item.uploadFile.size]);
+		if (!urlsData.success) {
+			const message = getUploadRequestError(urlsData);
+			setUploadQueueItem(index, {
+				status: 'error',
+				error: message
+			});
+			rateLimitError = message;
+			isUploading = false;
+			return;
+		}
+
+		setUploadQueueItem(index, { uploadData: urlsData.data[0] });
+		await processUploadQueue([index]);
+	}
+
+	// 上传单个文件，失败时自动重试，最终失败后保留为可手动重试
+	async function uploadSingleFile(index: number): Promise<boolean> {
+		while ((uploadQueue[index]?.attempts || 0) < MAX_UPLOAD_ATTEMPTS) {
+			try {
+				await uploadSingleFileOnce(index);
+				return true;
+			} catch (error) {
+				const item = uploadQueue[index];
+				if (!item) return false;
+
+				const message = getUploadErrorMessage(error);
+				if ((item.attempts || 0) >= MAX_UPLOAD_ATTEMPTS) {
+					setUploadQueueItem(index, {
+						status: 'error',
+						error: message
+					});
+					return false;
+				}
+
+				setUploadQueueItem(index, {
+					status: 'waiting',
+					error: undefined
+				});
+				await delay(800 * (item.attempts || 1));
+			}
+		}
+
+		return false;
+	}
+
+	async function uploadSingleFileOnce(index: number): Promise<void> {
+		const item = uploadQueue[index];
+		if (!item) throw new Error(i18n.t('channel.upload.uploadError'));
+
+		setUploadQueueItem(index, {
+			status: 'uploading',
+			progress: 0,
+			error: undefined,
+			attempts: (item.attempts || 0) + 1
+		});
+
+		await new Promise<void>((resolve, reject) => {
+			let settled = false;
+			let xhr: XMLHttpRequest | undefined;
+			let idleTimer: ReturnType<typeof setTimeout> | undefined;
+
+			const clearIdleTimer = () => {
+				if (idleTimer) clearTimeout(idleTimer);
+				idleTimer = undefined;
+			};
+
+			const finish = (error?: Error) => {
+				if (settled) return;
+				settled = true;
+				clearIdleTimer();
+
+				if (error) {
+					reject(error);
 				} else {
-					uploadQueue[index].status = 'error';
-					uploadQueue[index].error = `${i18n.t('channel.upload.uploadFailed')}: HTTP ${xhr.status}`;
-					reject(new Error(`HTTP ${xhr.status}`));
+					resolve();
 				}
 			};
 
-			const onprogress = (e: ProgressEvent) => {
-				if (e.lengthComputable) {
-					uploadQueue[index].progress = (e.loaded / e.total) * 100;
+			const resetIdleTimer = () => {
+				clearIdleTimer();
+				idleTimer = setTimeout(() => {
+					finish(new Error(i18n.t('channel.upload.uploadTimeout')));
+					xhr?.abort();
+				}, UPLOAD_IDLE_TIMEOUT_MS);
+			};
+
+			resetIdleTimer();
+
+			const onload = async (request: XMLHttpRequest) => {
+				clearIdleTimer();
+
+				if (request.status < 200 || request.status >= 300) {
+					finish(new Error(`${i18n.t('channel.upload.uploadFailed')}: HTTP ${request.status}`));
+					return;
+				}
+
+				try {
+					const addFileResult = (await addFile(
+						channel_id,
+						item.uploadData.fileKey,
+						item.storedName
+					)) as { success?: boolean; error?: string };
+
+					if (addFileResult?.success === false) {
+						throw new Error(addFileResult.error || i18n.t('channel.upload.addFileFailed'));
+					}
+
+					setUploadQueueItem(index, {
+						status: 'success',
+						progress: 100,
+						error: undefined
+					});
+					if (updateFilesListAfterUpload(item)) {
+						addToFileStats(item.storedSize);
+					}
+					finish();
+				} catch (error) {
+					finish(
+						new Error(
+							error instanceof Error ? error.message : i18n.t('channel.upload.addFileFailed')
+						)
+					);
 				}
 			};
 
-			const onerror = () => {
-				uploadQueue[index].status = 'error';
-				uploadQueue[index].error = i18n.t('channel.upload.networkError');
-				reject(new Error(i18n.t('channel.upload.networkError')));
+			const onprogress = (event: ProgressEvent) => {
+				if (settled) return;
+				resetIdleTimer();
+
+				if (event.lengthComputable) {
+					setUploadQueueItem(index, {
+						progress: (event.loaded / event.total) * 100
+					});
+				}
 			};
 
-			const onabort = () => {
-				uploadQueue[index].status = 'error';
-				uploadQueue[index].error = i18n.t('channel.upload.uploadCanceled');
-				reject(new Error(i18n.t('channel.upload.uploadCanceled')));
-			};
-
-			uploadWithPUT(uploadData.url, file, onload, onprogress, onerror, onabort);
+			xhr = uploadWithPUT(
+				item.uploadData.url,
+				item.uploadFile,
+				onload,
+				onprogress,
+				() => finish(new Error(i18n.t('channel.upload.networkError'))),
+				() => finish(new Error(i18n.t('channel.upload.uploadCanceled')))
+			);
 		});
 	}
 
@@ -411,6 +643,7 @@
 							},
 							...filesList
 						];
+						addToFileStats(fileToUpload.size);
 
 						txt = '';
 						resolve();
@@ -499,8 +732,12 @@
 				{#if uploadQueue.length > 0}
 					<div class="upload-queue">
 						<h4 class="queue-title">{i18n.t('channel.upload.progress')}</h4>
-						{#each uploadQueue as item (item.file.name + item.file.size)}
-							<FileUploadProgress {item} />
+						{#each uploadQueue as item, index (item.id)}
+							<FileUploadProgress
+								{item}
+								onRetry={() => retryUploadItem(index)}
+								retryDisabled={isUploading}
+							/>
 						{/each}
 					</div>
 				{:else}
@@ -621,7 +858,14 @@
 </div>
 
 <div class="files-list-section">
-	<h3 class="section-title">{i18n.t('channel.fileList.title')}</h3>
+	<div class="files-list-header">
+		<h3 class="section-title">{i18n.t('channel.fileList.title')}</h3>
+		<div class="files-list-stats" aria-label={i18n.t('channel.fileList.stats')}>
+			<span>{fileStats.fileCount} {i18n.t('channel.upload.files')}</span>
+			<span class="stats-separator">·</span>
+			<span>{formatStorageSize(fileStats.totalSize)} {i18n.t('channel.fileList.storageUsed')}</span>
+		</div>
+	</div>
 
 	{#if isLoadingFiles}
 		<div class="loading">{i18n.t('channel.fileList.loading')}</div>
@@ -886,7 +1130,7 @@
 		font-size: var(--text-xl);
 		font-weight: var(--font-semibold);
 		color: var(--color-foreground);
-		margin-bottom: var(--space-4);
+		margin: 0;
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
@@ -895,6 +1139,29 @@
 	.section-title::before {
 		content: '📋';
 		font-size: var(--text-2xl);
+	}
+
+	.files-list-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		margin-bottom: var(--space-4);
+	}
+
+	.files-list-stats {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		color: var(--color-muted-foreground);
+		font-size: var(--text-sm);
+		font-weight: var(--font-medium);
+		text-align: right;
+		white-space: nowrap;
+	}
+
+	.stats-separator {
+		opacity: 0.6;
 	}
 
 	.files-grid {
@@ -907,5 +1174,18 @@
 		padding: var(--space-8);
 		text-align: center;
 		color: var(--color-muted-foreground);
+	}
+
+	@media (max-width: 640px) {
+		.files-list-header {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: var(--space-1);
+		}
+
+		.files-list-stats {
+			text-align: left;
+			white-space: normal;
+		}
 	}
 </style>

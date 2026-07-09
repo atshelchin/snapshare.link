@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, desc, gt, and } from 'drizzle-orm';
+import { eq, desc, gt, and, sql } from 'drizzle-orm';
 import { files } from '$lib/server/db/schema';
 
 type ChannelFile = {
@@ -13,6 +13,15 @@ type ChannelFile = {
 	created_at: number;
 };
 
+type ChannelStats = {
+	fileCount: number;
+	totalSize: number;
+};
+
+type StreamFilesEnv = {
+	DB: D1Database;
+};
+
 export const GET: RequestHandler = async ({ url, platform }) => {
 	const channel_id = url.searchParams.get('channel_id');
 
@@ -20,7 +29,12 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		return new Response('channel_id is required', { status: 400 });
 	}
 
-	const db = drizzle(platform?.env!.DB);
+	const env = (platform as { env?: StreamFilesEnv } | undefined)?.env;
+	if (!env) {
+		return new Response('platform env is required', { status: 500 });
+	}
+
+	const db = drizzle(env.DB);
 
 	// 创建 SSE 响应
 	const stream = new ReadableStream({
@@ -28,25 +42,51 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 			const encoder = new TextEncoder();
 
 			// 发送 SSE 消息的辅助函数
-			const sendEvent = (data: { type: string; data?: ChannelFile[]; error?: string }) => {
+			const sendEvent = (data: {
+				type: string;
+				data?: ChannelFile[];
+				stats?: ChannelStats;
+				error?: string;
+			}) => {
 				const message = `data: ${JSON.stringify(data)}\n\n`;
 				controller.enqueue(encoder.encode(message));
 			};
 
-			try {
-				// 首次加载最新10条数据
-				const initialFiles = (await db
-					.select()
+			const getChannelStats = async (): Promise<ChannelStats> => {
+				const rows = (await db
+					.select({
+						fileCount: sql<number>`count(*)`,
+						totalSize: sql<number>`coalesce(sum(${files.file_size}), 0)`
+					})
 					.from(files)
 					.where(eq(files.channel_id, channel_id))
-					.orderBy(desc(files.created_at))
-					.limit(10)
-					.all()) as ChannelFile[];
+					.all()) as ChannelStats[];
+
+				const stats = rows[0];
+				return {
+					fileCount: Number(stats?.fileCount || 0),
+					totalSize: Number(stats?.totalSize || 0)
+				};
+			};
+
+			try {
+				// 首次加载最新10条数据
+				const [initialFiles, initialStats] = await Promise.all([
+					db
+						.select()
+						.from(files)
+						.where(eq(files.channel_id, channel_id))
+						.orderBy(desc(files.created_at))
+						.limit(10)
+						.all() as Promise<ChannelFile[]>,
+					getChannelStats()
+				]);
 
 				// 发送初始数据
 				sendEvent({
 					type: 'initial',
-					data: initialFiles
+					data: initialFiles,
+					stats: initialStats
 				});
 
 				// 记录最新的时间戳
@@ -67,11 +107,13 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 						if (newFiles.length > 0) {
 							// 更新最新时间戳
 							lastTimestamp = Math.max(...newFiles.map((f) => f.created_at));
+							const stats = await getChannelStats();
 
 							// 发送增量数据
 							sendEvent({
 								type: 'update',
-								data: newFiles
+								data: newFiles,
+								stats
 							});
 						}
 					} catch (error) {

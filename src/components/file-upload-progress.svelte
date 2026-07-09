@@ -2,13 +2,24 @@
 	import { useI18n } from '@shelchin/i18n/svelte';
 
 	export interface UploadProgress {
+		id?: string;
 		file: File;
 		status: 'waiting' | 'uploading' | 'success' | 'error';
 		progress: number;
 		error?: string;
+		attempts?: number;
+		maxAttempts?: number;
 	}
 
-	let { item } = $props<{ item: UploadProgress }>();
+	let {
+		item,
+		onRetry,
+		retryDisabled = false
+	} = $props<{
+		item: UploadProgress;
+		onRetry?: () => void;
+		retryDisabled?: boolean;
+	}>();
 	const i18n = useI18n();
 
 	// 格式化文件大小
@@ -65,9 +76,17 @@
 					{#if item.status === 'uploading'}
 						<span class="progress-text">{Math.round(item.progress)}%</span>
 					{/if}
+					{#if item.status !== 'success' && item.maxAttempts && item.maxAttempts > 1}
+						<span class="attempt-text">{item.attempts || 0}/{item.maxAttempts}</span>
+					{/if}
 				</div>
 			</div>
 		</div>
+		{#if item.status === 'error' && onRetry}
+			<button class="retry-button" onclick={onRetry} disabled={retryDisabled}>
+				{i18n.t('channel.upload.retry')}
+			</button>
+		{/if}
 	</div>
 
 	{#if item.status === 'uploading' || item.status === 'success'}
@@ -99,6 +118,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: var(--space-3);
 	}
 
 	.file-info {
@@ -130,6 +150,7 @@
 
 	.file-meta {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-2);
 		margin-top: var(--space-1);
 		font-size: var(--text-sm);
@@ -147,6 +168,36 @@
 	.progress-text {
 		color: var(--color-primary);
 		font-weight: var(--font-semibold);
+	}
+
+	.attempt-text {
+		color: var(--color-muted-foreground);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.retry-button {
+		flex-shrink: 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-panel-2);
+		color: var(--color-primary);
+		font-size: var(--text-sm);
+		font-weight: var(--font-medium);
+		padding: var(--space-1-5) var(--space-3);
+		cursor: pointer;
+		transition:
+			background 0.2s ease,
+			border-color 0.2s ease;
+	}
+
+	.retry-button:hover:not(:disabled) {
+		border-color: var(--color-primary);
+		background: hsla(var(--brand-hue), var(--brand-saturation), 50%, 0.08);
+	}
+
+	.retry-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.progress-bar-container {

@@ -64,7 +64,10 @@
 			"uploadError": "Error occurred during upload",
 			"networkError": "Network error",
 			"uploadCanceled": "Upload canceled",
+			"uploadTimeout": "Upload stalled, please retry",
 			"addFileFailed": "Failed to add file record",
+			"retry": "Retry",
+			"filesFailed": "files failed. Retry them individually.",
 			"maxFiles": "Maximum 100 files allowed, currently selected",
 			"filesSelected": "",
 			"pleaseDelete": "please delete"
@@ -77,6 +80,8 @@
 		},
 		"fileList": {
 			"title": "Channel Files",
+			"stats": "Channel file stats",
+			"storageUsed": "used",
 			"loading": "Loading...",
 			"empty": "No files yet",
 			"download": "Download"
