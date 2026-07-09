@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { textToFile, genUploadUrls, uploadWithPUT, addFile, validateFiles } from '$lib';
+	import {
+		FILE_VALIDATION,
+		formatUploadLimitSize,
+		textToFile,
+		genUploadUrls,
+		uploadWithPUT,
+		addFile,
+		validateFiles
+	} from '$lib';
 	import ChannelHeader from '../../../components/channel-header.svelte';
 	import DangerNotice from '../../../components/danger-notice.svelte';
 	import Tabs from '../../../components/tabs.svelte';
@@ -14,6 +22,7 @@
 	let { params } = $props();
 	const i18n = useI18n();
 	const channel_id = params.channel_id;
+	const maxFileSizeLabel = formatUploadLimitSize();
 
 	// 隐私频道：从 URL hash 解析加密密钥和创建者名字
 	let encryptionKey = $state<CryptoKey | null>(null);
@@ -139,8 +148,8 @@
 		}
 
 		const currentValidFiles = selectedFiles.filter((f) => !f.error);
-		if (currentValidFiles.length > 10) {
-			const toDelete = currentValidFiles.length - 10;
+		if (currentValidFiles.length > FILE_VALIDATION.MAX_FILES) {
+			const toDelete = currentValidFiles.length - FILE_VALIDATION.MAX_FILES;
 			validationError = `${i18n.t('channel.upload.maxFiles')} ${currentValidFiles.length} ${i18n.t('channel.upload.filesSelected')}, ${i18n.t('channel.upload.pleaseDelete')} ${toDelete} ${i18n.t('channel.upload.files')}`;
 		}
 	}
@@ -176,8 +185,8 @@
 		selectedFiles = selectedFiles.filter((_, i) => i !== index);
 
 		const currentValidFiles = selectedFiles.filter((f) => !f.error);
-		if (currentValidFiles.length > 10) {
-			const toDelete = currentValidFiles.length - 10;
+		if (currentValidFiles.length > FILE_VALIDATION.MAX_FILES) {
+			const toDelete = currentValidFiles.length - FILE_VALIDATION.MAX_FILES;
 			validationError = `${i18n.t('channel.upload.maxFiles')} ${currentValidFiles.length} ${i18n.t('channel.upload.filesSelected')}, ${i18n.t('channel.upload.pleaseDelete')} ${toDelete} ${i18n.t('channel.upload.files')}`;
 		} else {
 			validationError = '';
@@ -247,8 +256,8 @@
 			const urlsData = await genUploadUrls(fileSizes);
 
 			if (!urlsData.success) {
-				if (urlsData.limit) {
-					const limit = urlsData.limit.hour || urlsData.limit.day;
+				const limit = urlsData.limit?.hour || urlsData.limit?.day || urlsData.limit?.global;
+				if (limit) {
 					const currentMB = Math.round(limit.current / 1024 / 1024);
 					const maxMB = Math.round(limit.max / 1024 / 1024);
 					rateLimitError = `${i18n.t('channel.upload.rateLimitError')}: ${urlsData.error}. ${currentMB}MB / ${maxMB}MB`;
@@ -373,8 +382,8 @@
 			const urlsData = await genUploadUrls([fileToUpload.size]);
 
 			if (!urlsData.success) {
-				if (urlsData.limit) {
-					const limit = urlsData.limit.hour || urlsData.limit.day;
+				const limit = urlsData.limit?.hour || urlsData.limit?.day || urlsData.limit?.global;
+				if (limit) {
 					const currentMB = Math.round(limit.current / 1024 / 1024);
 					const maxMB = Math.round(limit.max / 1024 / 1024);
 					rateLimitError = `${i18n.t('channel.upload.rateLimitError')}: ${urlsData.error}. ${currentMB}MB / ${maxMB}MB`;
@@ -449,7 +458,16 @@
 
 {#if isPrivacyMode}
 	<div class="privacy-badge">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<svg
+			width="16"
+			height="16"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		>
 			<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
 			<path d="M7 11V7a5 5 0 0 1 10 0v4" />
 		</svg>
@@ -508,9 +526,10 @@
 							<div class="upload-text">
 								<div class="upload-title">{i18n.t('channel.upload.clickOrDrag')}</div>
 								<div class="upload-hint">
-									{i18n.t('channel.upload.limit')} 10 {i18n.t('channel.upload.files')}, {i18n.t(
-										'channel.upload.maxSize'
-									)} 100MB
+									{i18n.t('channel.upload.limit')}
+									{FILE_VALIDATION.MAX_FILES}
+									{i18n.t('channel.upload.files')}, {i18n.t('channel.upload.maxSize')}
+									{maxFileSizeLabel}
 								</div>
 								{#if isPrivacyMode}
 									<div class="upload-hint privacy-hint">{i18n.t('privacy.encrypted')}</div>
@@ -543,10 +562,20 @@
 							onclick={shareFiles}
 							disabled={selectedFiles.every((f) => f.error) ||
 								isUploading ||
-								selectedFiles.filter((f) => !f.error).length > 10}
+								selectedFiles.filter((f) => !f.error).length > FILE_VALIDATION.MAX_FILES}
 						>
 							{#if isPrivacyMode}
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+								<svg
+									width="14"
+									height="14"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									style="margin-right: 4px;"
+								>
 									<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
 									<path d="M7 11V7a5 5 0 0 1 10 0v4" />
 								</svg>

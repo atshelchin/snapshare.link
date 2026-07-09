@@ -65,7 +65,7 @@
 			"networkError": "网络错误",
 			"uploadCanceled": "上传已取消",
 			"addFileFailed": "添加文件记录失败",
-			"maxFiles": "最多只能上传 10 个文件，当前已选择",
+			"maxFiles": "最多只能上传 100 个文件，当前已选择",
 			"filesSelected": "个",
 			"pleaseDelete": "请删除"
 		},

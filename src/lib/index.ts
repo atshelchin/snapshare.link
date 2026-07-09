@@ -29,10 +29,18 @@ export async function hashIP(ip: string): Promise<string> {
 }
 
 // 文件验证配置
-const FILE_VALIDATION = {
-	MAX_FILES: 10,
-	MAX_FILE_SIZE: 100 * 1024 * 1024 // 100MB
-};
+export const FILE_VALIDATION = {
+	MAX_FILES: 100,
+	MAX_FILE_SIZE: 1024 * 1024 * 1024 // 1GB
+} as const;
+
+export function formatUploadLimitSize(bytes = FILE_VALIDATION.MAX_FILE_SIZE): string {
+	const gb = bytes / 1024 / 1024 / 1024;
+	if (Number.isInteger(gb)) return `${gb}GB`;
+
+	const mb = bytes / 1024 / 1024;
+	return `${Number.isInteger(mb) ? mb : Math.round(mb * 100) / 100}MB`;
+}
 
 export interface FileValidationError {
 	file: File;
@@ -69,7 +77,7 @@ export function validateFiles(files: FileList | File[]): FileValidationResult {
 		if (file.size > FILE_VALIDATION.MAX_FILE_SIZE) {
 			invalid.push({
 				file,
-				error: `文件大小超过 ${FILE_VALIDATION.MAX_FILE_SIZE / 1024 / 1024}MB`
+				error: `文件大小超过 ${formatUploadLimitSize()}`
 			});
 		} else if (file.size === 0) {
 			invalid.push({
@@ -99,7 +107,7 @@ export async function createPresignedUploadUrl(env: Env, fileSizeBytes: number) 
 	const time = new Date(now.getTime());
 	const prefix = time.toISOString().slice(0, 13);
 	const fileKey = prefix + '/' + uuid;
-	const maxSize = 100 * 1024 * 1024;
+	const maxSize = FILE_VALIDATION.MAX_FILE_SIZE;
 
 	if (fileSizeBytes > maxSize) {
 		throw new Error('fileSizeBytes exceeded max size limit ');
@@ -133,12 +141,50 @@ export async function createPresignedUploadUrl(env: Env, fileSizeBytes: number) 
 	};
 }
 
+export interface UploadUrlData {
+	url: string;
+	method: string;
+	fileKey: string;
+	fileSizeBytes: number;
+	maxSizeBytes: number;
+	expiresIn: number;
+}
+
+export interface UploadRateLimit {
+	current: number;
+	max: number;
+	requested?: number;
+	window?: string;
+	unit?: string;
+	scope?: string;
+}
+
+export type GenUploadUrlsResponse =
+	| {
+			success: true;
+			data: UploadUrlData[];
+			limit?: {
+				day?: UploadRateLimit;
+				hour?: UploadRateLimit;
+				global?: UploadRateLimit;
+			};
+	  }
+	| {
+			success: false;
+			error?: string;
+			limit?: {
+				day?: UploadRateLimit;
+				hour?: UploadRateLimit;
+				global?: UploadRateLimit;
+			};
+	  };
+
 export function textToFile(text: string, filename: string = 'untitled.txt'): File {
 	const blob = new Blob([text], { type: 'text/plain' });
 	return new File([blob], filename, { type: 'text/plain' });
 }
 
-export async function genUploadUrls(files: number[]) {
+export async function genUploadUrls(files: number[]): Promise<GenUploadUrlsResponse> {
 	const url = 'https://snapshare.link/api/create-presigned-upload-url';
 	const body = { files: files };
 	const options = {
@@ -149,19 +195,27 @@ export async function genUploadUrls(files: number[]) {
 
 	try {
 		const response = await fetch(url, options);
-		const data = await response.json();
+		const data = (await response.json()) as GenUploadUrlsResponse;
 
 		return data;
 	} catch (error) {
 		console.error(error);
+		return { success: false, error: String(error) };
 	}
 }
 
-export function updateProgress(a, b) {
+export function updateProgress(a: unknown, b: unknown) {
 	console.log(a, b);
 }
 
-export function uploadWithPUT(url: string, file: File, onload, onprogress, onerror, onabort) {
+export function uploadWithPUT(
+	url: string,
+	file: File,
+	onload?: (xhr: XMLHttpRequest) => void,
+	onprogress?: (event: ProgressEvent) => void,
+	onerror?: () => void,
+	onabort?: () => void
+) {
 	const uploadXHR = new XMLHttpRequest();
 
 	// 监听上传进度

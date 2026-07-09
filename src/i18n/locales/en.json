@@ -65,7 +65,7 @@
 			"networkError": "Network error",
 			"uploadCanceled": "Upload canceled",
 			"addFileFailed": "Failed to add file record",
-			"maxFiles": "Maximum 10 files allowed, currently selected",
+			"maxFiles": "Maximum 100 files allowed, currently selected",
 			"filesSelected": "",
 			"pleaseDelete": "please delete"
 		},
